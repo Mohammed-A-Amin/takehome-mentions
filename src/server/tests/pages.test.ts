@@ -81,6 +81,17 @@ describe("GET /api/pages", () => {
     expect(res.body.results.length).toBeLessThanOrEqual(3);
   });
 
+  it("returns 15 recently edited pages for an empty query", async () => {
+    const res = await request(app).get("/api/pages").query({ q: "" });
+    expect(res.status).toBe(200);
+    expect(res.body.results).toHaveLength(15);
+
+    const editedTimes = res.body.results.map((result: { lastEditedTime: string }) =>
+      Date.parse(result.lastEditedTime),
+    );
+    expect(editedTimes).toEqual([...editedTimes].sort((a, b) => b - a));
+  });
+
   it("returns content and timestamps on every result", async () => {
     const before = Date.now();
     const res = await request(app).get("/api/pages").query({ q: "a", limit: 50 });
