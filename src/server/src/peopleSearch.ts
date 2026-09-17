@@ -20,10 +20,10 @@ export const CURRENT_USER: CurrentUser = {
 /**
  * Rank upstream substring matches for a typed query.
  *
- * The hosted service deliberately returns unranked results. Lexical match
+ * The hosted service deliberately returns unranked substring matches. Lexical
  * quality is the primary signal, while similarity to the current user breaks
- * ties between similarly relevant people. This keeps an exact name match ahead
- * of a weaker team match while still favoring likely collaborators.
+ * ties between similarly relevant people. Candidates with no local lexical
+ * match are removed so the result limit is a ceiling rather than a quota.
  */
 export function rankPeople(
   people: Person[],
@@ -37,6 +37,7 @@ export function rankPeople(
       lexicalScore: typedScore(person, normalizedQuery),
       similarity: similarityScore(person, currentUser),
     }))
+    .filter(({ lexicalScore }) => lexicalScore > 0)
     .sort(
       (a, b) =>
         b.lexicalScore - a.lexicalScore ||
