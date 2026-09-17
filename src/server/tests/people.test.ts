@@ -59,6 +59,24 @@ describe("people ranking", () => {
     expect(results.map((person) => person.name)).toEqual(["Alex Two", "Alex One"]);
   });
 
+  it("omits candidates with no lexical match", () => {
+    const results = rankPeople(
+      [
+        alex,
+        {
+          ...alex,
+          id: "unrelated",
+          name: "Jordan Lee",
+          email: "jordan@example.com",
+          team: "Finance",
+          title: "Accountant",
+        },
+      ],
+      "alex",
+    );
+    expect(results.map((person) => person.name)).toEqual(["Alex Kim"]);
+  });
+
   it("prioritizes same team over same title for empty-query recommendations", () => {
     const results = recommendPeople([
       { ...alexandra, id: "same-team", name: "Taylor Chen", team: CURRENT_USER.team },
