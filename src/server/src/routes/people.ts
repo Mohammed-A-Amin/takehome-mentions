@@ -5,7 +5,6 @@ import { CURRENT_USER, recommendPeople, rankPeople } from "../peopleSearch.js";
 const PEOPLE_ENDPOINT = "https://takehome.notion.dev/people";
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 20;
-const UPSTREAM_LIMIT = 100;
 const UPSTREAM_TIMEOUT_MS = 1_500;
 const TYPED_TTL_MS = 45_000;
 const EMPTY_TTL_MS = 20_000;
@@ -19,8 +18,7 @@ type CacheEntry = { response: PeopleResponse; fetchedAt: number };
 /**
  * Build the local People API.
  *
- * This router owns the product behavior around the hosted directory: it
- * validates upstream records, ranks them, limits the response, and protects
+ * This router validates upstream records, ranks them, limits the response, and protects
  * the UI from directory latency with caching, request deduplication, timeout
  * handling, and stale-result fallback.
  */
@@ -109,7 +107,7 @@ async function fetchAndRank(query: string, fetchPeople: FetchLike): Promise<Peop
   }
 }
 
-/** Fetch and validate one bounded candidate set from the hosted directory. */
+/** Fetch and validate the hosted directory's candidate set. */
 async function fetchDirectory(
   query: string,
   fetchPeople: FetchLike,
@@ -117,7 +115,6 @@ async function fetchDirectory(
 ): Promise<Person[]> {
   const url = new URL(PEOPLE_ENDPOINT);
   url.searchParams.set("q", query);
-  url.searchParams.set("limit", String(UPSTREAM_LIMIT));
   const response = await fetchPeople(url, { signal });
   if (!response.ok) throw new Error(`People directory returned ${response.status}`);
   const body = (await response.json()) as { results?: unknown };
