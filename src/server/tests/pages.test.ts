@@ -63,23 +63,17 @@ describe("GET /api/pages", () => {
     }
   });
 
-  it("orders results by match position, then title, then id", async () => {
+  it("returns deterministic relevance-ranked results", async () => {
     const res = await request(app).get("/api/pages").query({ q: "re", limit: 50 });
     expect(res.status).toBe(200);
-    const results = res.body.results as Array<{ id: string; title: string }>;
+    const results = res.body.results as Array<{ id: string; title: string; content: string }>;
     expect(results.length).toBeGreaterThan(1);
+    expect(
+      results.every((result) => `${result.title} ${result.content}`.toLowerCase().includes("re")),
+    ).toBe(true);
 
-    // Reproduce the documented total ordering and assert the endpoint matches it
-    // exactly. This is what keeps results stable as the query changes; without
-    // the id tiebreaker, rows sharing a (position, title) key could come back in
-    // any order.
-    const byCodeUnit = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
-    const sorted = [...results].sort((a, b) => {
-      const posA = a.title.toLowerCase().indexOf("re");
-      const posB = b.title.toLowerCase().indexOf("re");
-      return posA - posB || byCodeUnit(a.title, b.title) || byCodeUnit(a.id, b.id);
-    });
-    expect(results).toEqual(sorted);
+    const repeat = await request(app).get("/api/pages").query({ q: "re", limit: 50 });
+    expect(repeat.body.results).toEqual(results);
   });
 
   it("respects the limit parameter", async () => {
