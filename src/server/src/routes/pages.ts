@@ -50,8 +50,11 @@ export function createPagesRouter(db: Database.Database): Router {
 /** Rank typed page candidates and remove pages with no meaningful match. */
 export function rankPages(pages: Page[], query: string): ScoredPage[] {
   const normalizedQuery = normalize(query);
-  if (!normalizedQuery)
-    return pages.map((page) => ({ page, score: 0, titleMatchPosition: 0, tokenCoverage: 0 }));
+  if (!normalizedQuery) {
+    return pages
+      .map((page) => ({ page, score: 0, titleMatchPosition: 0, tokenCoverage: 0 }))
+      .sort((a, b) => compareRecentPages(a.page, b.page));
+  }
 
   return pages
     .map((page) => scorePage(page, normalizedQuery))
@@ -106,6 +109,15 @@ function countMatchingTokens(queryTokens: string[], candidateTokens: string[]): 
 
 function comparePages(a: Page, b: Page): number {
   return a.title.localeCompare(b.title) || a.id.localeCompare(b.id);
+}
+
+/** Order the empty-query page menu by observable freshness, then stable fields. */
+function compareRecentPages(a: Page, b: Page): number {
+  return (
+    b.lastEditedTime.localeCompare(a.lastEditedTime) ||
+    b.createdTime.localeCompare(a.createdTime) ||
+    comparePages(a, b)
+  );
 }
 
 function normalize(value: string): string {
