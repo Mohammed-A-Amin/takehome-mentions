@@ -45,3 +45,12 @@ export async function createPage(title: string, icon: string = "📄"): Promise<
   }
   return (await res.json()) as PageResult;
 }
+
+/** Permanently delete a locally created page by its stable ID. */
+export async function deletePage(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/pages/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!res.ok) {
+    const errorBody = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(errorBody.error ?? `Failed to delete page: ${res.status}`);
+  }
+}

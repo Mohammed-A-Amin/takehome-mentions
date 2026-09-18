@@ -187,3 +187,21 @@ describe("POST /api/pages", () => {
     expect(res2.status).toBe(400);
   });
 });
+
+describe("DELETE /api/pages/:id", () => {
+  it("deletes a page and makes it unavailable to later searches", async () => {
+    const created = await request(app).post("/api/pages").send({ title: "Disposable page" });
+    const deleted = await request(app).delete(`/api/pages/${created.body.id}`);
+
+    expect(deleted.status).toBe(204);
+    const search = await request(app).get("/api/pages").query({ q: "Disposable page" });
+    expect(search.body.results.some((page: { id: string }) => page.id === created.body.id)).toBe(
+      false,
+    );
+  });
+
+  it("returns 404 when the page does not exist", async () => {
+    const response = await request(app).delete("/api/pages/missing-page");
+    expect(response.status).toBe(404);
+  });
+});

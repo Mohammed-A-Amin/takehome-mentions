@@ -1,89 +1,29 @@
 import { useEffect, useRef } from "react";
+import type { MenuOption, OverflowSection } from "./mentionMenuModel";
 import type { MentionResult, PageResult, PersonResult } from "./types";
 
-export const VISIBLE_PER_SECTION = 5;
-export const MAX_COMPACTED = 15;
-
 type MentionMenuProps = {
-  results: MentionResult[];
+  options: MenuOption[];
   activeIndex: number;
-  expandedPeople: boolean;
-  expandedPages: boolean;
-  query?: string;
   onActiveIndexChange: (index: number) => void;
   onSelect: (result: MentionResult) => void;
   onExpand: (section: OverflowSection) => void;
   onCreatePage?: (title: string) => void;
+  onDeletePage: (page: PageResult) => void;
   position: { left: number; top: number };
 };
 
-export type OverflowSection = "people" | "pages";
-
-export type MenuOption =
-  | { kind: "result"; result: MentionResult }
-  | { kind: "more"; section: OverflowSection; moreCount: number }
-  | { kind: "create"; title: string };
-
-/** Split a section into the rows shown now and the compacted leftover count. */
-export function sectionView<T>(items: T[], expanded: boolean): { visible: T[]; moreCount: number } {
-  if (expanded || items.length <= VISIBLE_PER_SECTION) {
-    return { visible: items, moreCount: 0 };
-  }
-  const hidden = Math.min(MAX_COMPACTED, items.length - VISIBLE_PER_SECTION);
-  return { visible: items.slice(0, VISIBLE_PER_SECTION), moreCount: hidden };
-}
-
-/** Flatten people, optional people overflow, pages, optional pages overflow, create option, then dates. */
-export function buildMenuOptions(
-  results: MentionResult[],
-  expandedPeople: boolean,
-  expandedPages: boolean,
-  query?: string,
-): MenuOption[] {
-  const people = results.filter((result): result is PersonResult => result.type === "person");
-  const pages = results.filter((result): result is PageResult => result.type === "page");
-  const dates = results.filter((result) => result.type === "date");
-  const peopleView = sectionView(people, expandedPeople);
-  const pagesView = sectionView(pages, expandedPages);
-  const options: MenuOption[] = [];
-
-  for (const result of peopleView.visible) options.push({ kind: "result", result });
-  if (peopleView.moreCount > 0) {
-    options.push({ kind: "more", section: "people", moreCount: peopleView.moreCount });
-  }
-  for (const result of pagesView.visible) options.push({ kind: "result", result });
-  if (pagesView.moreCount > 0) {
-    options.push({ kind: "more", section: "pages", moreCount: pagesView.moreCount });
-  }
-
-  const trimmedQuery = query?.trim();
-  const hasExactPageMatch = trimmedQuery
-    ? pages.some((p) => p.title.toLowerCase() === trimmedQuery.toLowerCase())
-    : false;
-
-  if (trimmedQuery && !hasExactPageMatch) {
-    options.push({ kind: "create", title: trimmedQuery });
-  }
-
-  for (const result of dates) options.push({ kind: "result", result });
-  return options;
-}
-
 /** Render the caret-positioned suggestion list with per-section overflow. */
 export function MentionMenu({
-  results,
+  options,
   activeIndex,
-  expandedPeople,
-  expandedPages,
-  query,
   onActiveIndexChange,
   onSelect,
   onExpand,
   onCreatePage,
+  onDeletePage,
   position,
 }: MentionMenuProps) {
-  const options = buildMenuOptions(results, expandedPeople, expandedPages, query);
-
   if (options.length === 0) {
     return (
       <div className="menu menu--empty" style={{ left: position.left, top: position.top }}>
@@ -92,8 +32,13 @@ export function MentionMenu({
     );
   }
 
-  const people = results.filter((result): result is PersonResult => result.type === "person");
-  const pages = results.filter((result) => result.type === "page");
+  const people = options.filter(
+    (option): option is { kind: "result"; result: PersonResult } =>
+      option.kind === "result" && option.result.type === "person",
+  );
+  const pages = options.filter(
+    (option) => option.kind === "result" && option.result.type === "page",
+  );
   const menuRef = useRef<HTMLDivElement>(null);
   let nextIndex = 0;
 
@@ -171,6 +116,19 @@ export function MentionMenu({
         <button type="button" className="menu__button" onClick={() => onSelect(result)}>
           <MentionLabel result={result} />
         </button>
+        {result.type === "page" && (
+          <button
+            type="button"
+            className="menu__delete-page"
+            aria-label={`Delete ${result.title}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDeletePage(result);
+            }}
+          >
+            ×
+          </button>
+        )}
       </div>
     );
   };

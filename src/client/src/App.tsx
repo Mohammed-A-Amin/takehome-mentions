@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { createPage, searchPages, searchPeople } from "./api";
-import { buildMenuOptions, MentionMenu, type OverflowSection } from "./MentionMenu";
+import { createPage, deletePage } from "./api";
+import { MentionMenu } from "./MentionMenu";
+import { buildMenuOptions, type OverflowSection } from "./mentionMenuModel";
 import {
   findCommonSuffix,
   findEditStart,
@@ -11,30 +12,12 @@ import {
   type CommittedMention,
 } from "./mentionUtils";
 import { useCaretPosition } from "./useCaretPosition";
+import { prefetchEmptyResults, useMentionSearch } from "./useMentionSearch";
 import type { MentionResult, PageResult } from "./types";
 import "./App.css";
 
-const QUERY_DEBOUNCE_MS = 125;
-
-type EmptyResults = { people: MentionResult[]; pages: MentionResult[] };
-let emptyResultsPromise: Promise<EmptyResults> | undefined;
-
-/** Warm the blank-document menu so the first empty @ can render immediately. */
-function prefetchEmptyResults(forceRefresh = false): Promise<EmptyResults> {
-  if (!emptyResultsPromise || forceRefresh) {
-    emptyResultsPromise = Promise.allSettled([searchPeople(""), searchPages("")]).then(
-      ([people, pages]) => ({
-        people: people.status === "fulfilled" ? people.value : [],
-        pages: pages.status === "fulfilled" ? pages.value : [],
-      }),
-    );
-  }
-  return emptyResultsPromise;
-}
-
 export function App() {
   const [value, setValue] = useState("");
-  const [results, setResults] = useState<MentionResult[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [expandedPeople, setExpandedPeople] = useState(false);
   const [expandedPages, setExpandedPages] = useState(false);
@@ -42,8 +25,10 @@ export function App() {
   const [selectionEnd, setSelectionEnd] = useState(0);
   const [isEditorFocused, setIsEditorFocused] = useState(false);
   const [previewResult, setPreviewResult] = useState<MentionResult | null>(null);
+  const [pagePendingDeletion, setPagePendingDeletion] = useState<PageResult | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeletingPage, setIsDeletingPage] = useState(false);
 
-  const requestId = useRef(0);
   const committedMentions = useRef<CommittedMention[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
@@ -69,6 +54,7 @@ export function App() {
   const rawQuery = match ? match[1] : null;
   const query = rawQuery === null ? null : rawQuery.trim();
   const isMenuOpen = rawQuery !== null && !/\s$/.test(rawQuery);
+  const { results, refresh: refreshMentionResults } = useMentionSearch({ isMenuOpen, query });
   const menuOptions = buildMenuOptions(results, expandedPeople, expandedPages, query ?? undefined);
 
   const { caretPosition, menuPosition } = useCaretPosition({
@@ -88,60 +74,9 @@ export function App() {
   }, [activeIndex, expandedPages, expandedPeople, results, menuOptions]);
 
   useEffect(() => {
-    void prefetchEmptyResults();
-  }, []);
-
-  useEffect(() => {
-    if (!isMenuOpen || query === null) {
-      setResults([]);
-      setActiveIndex(0);
-      setExpandedPeople(false);
-      setExpandedPages(false);
-      return;
-    }
-
     setExpandedPeople(false);
     setExpandedPages(false);
     setActiveIndex(0);
-
-    const currentRequestId = ++requestId.current;
-    if (query === "") {
-      void prefetchEmptyResults().then(({ people, pages }) => {
-        if (currentRequestId !== requestId.current) return;
-        setResults([...people, ...pages]);
-        setActiveIndex(0);
-      });
-      return;
-    }
-
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => {
-      let nextPeople: MentionResult[] = [];
-      let nextPages: MentionResult[] = [];
-      const publish = () => {
-        if (controller.signal.aborted || currentRequestId !== requestId.current) return;
-        setResults([...nextPeople, ...nextPages]);
-        setActiveIndex(0);
-      };
-
-      void searchPeople(query, controller.signal)
-        .then((people) => {
-          nextPeople = people;
-          publish();
-        })
-        .catch(() => undefined);
-      void searchPages(query, controller.signal)
-        .then((pages) => {
-          nextPages = pages;
-          publish();
-        })
-        .catch(() => undefined);
-    }, QUERY_DEBOUNCE_MS);
-
-    return () => {
-      window.clearTimeout(timeout);
-      controller.abort();
-    };
   }, [isMenuOpen, query]);
 
   function handleSelect(result: MentionResult) {
@@ -197,6 +132,22 @@ export function App() {
     setPreviewResult(null);
     if (section === "people") setExpandedPeople(true);
     else setExpandedPages(true);
+  }
+
+  async function handleConfirmPageDeletion() {
+    if (!pagePendingDeletion) return;
+    setIsDeletingPage(true);
+    setDeleteError(null);
+    try {
+      await deletePage(pagePendingDeletion.id);
+      void prefetchEmptyResults(true);
+      refreshMentionResults();
+      setPagePendingDeletion(null);
+    } catch {
+      setDeleteError("Could not delete this page. Please try again.");
+    } finally {
+      setIsDeletingPage(false);
+    }
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -281,75 +232,93 @@ export function App() {
 
   return (
     <main className="app">
-      <section className="document" aria-label="Blank document">
-        <div className="document__topbar">
-          <button type="button" className="document__close" aria-label="Close new page">
-            x
-          </button>
-          <span className="document__title">New page</span>
+      <div className="composer" ref={composerRef}>
+        <div className="composer__formatted-value" aria-hidden="true">
+          {previewResult
+            ? renderPreviewValue(value, cursorPosition, previewResult, committedMentions.current)
+            : renderFormattedValue(value, committedMentions.current)}
         </div>
-        <div className="document__page">
-          <div className="composer" ref={composerRef}>
-            <div className="composer__formatted-value" aria-hidden="true">
-              {previewResult
-                ? renderPreviewValue(
-                    value,
-                    cursorPosition,
-                    previewResult,
-                    committedMentions.current,
-                  )
-                : renderFormattedValue(value, committedMentions.current)}
+        {caretPosition && (
+          <span
+            className="composer__caret"
+            aria-hidden="true"
+            style={{
+              left: caretPosition.left,
+              top: caretPosition.top,
+              height: caretPosition.height,
+            }}
+          />
+        )}
+        <textarea
+          ref={textareaRef}
+          className="composer__input"
+          placeholder="Type @ to mention a page, person, or date…"
+          value={value}
+          onChange={handleChange}
+          onFocus={() => setIsEditorFocused(true)}
+          onBlur={() => setIsEditorFocused(false)}
+          onClick={syncCursorPosition}
+          onKeyUp={syncCursorPosition}
+          onSelect={syncCursorPosition}
+          onScroll={syncCursorPosition}
+          onKeyDown={handleKeyDown}
+          rows={3}
+          autoFocus
+          aria-label="Document content"
+          aria-autocomplete="list"
+          aria-controls={isMenuOpen ? "mention-menu" : undefined}
+          aria-activedescendant={
+            isMenuOpen && menuOptions.length > 0 ? `mention-option-${activeIndex}` : undefined
+          }
+        />
+        {isMenuOpen && (
+          <MentionMenu
+            options={menuOptions}
+            activeIndex={activeIndex}
+            onActiveIndexChange={handleActiveIndexChange}
+            onSelect={handleSelect}
+            onExpand={handleExpand}
+            onCreatePage={handleCreatePage}
+            onDeletePage={setPagePendingDeletion}
+            position={menuPosition}
+          />
+        )}
+      </div>
+      {pagePendingDeletion && (
+        <div className="delete-modal__backdrop" role="presentation">
+          <section
+            className="delete-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-modal-title"
+          >
+            <h2 id="delete-modal-title">Delete page?</h2>
+            <p>
+              This will permanently delete <strong>{pagePendingDeletion.title}</strong>. This action
+              cannot be undone.
+            </p>
+            {deleteError && <p className="delete-modal__error">{deleteError}</p>}
+            <div className="delete-modal__actions">
+              <button
+                type="button"
+                className="delete-modal__cancel"
+                disabled={isDeletingPage}
+                onClick={() => setPagePendingDeletion(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="delete-modal__confirm"
+                disabled={isDeletingPage}
+                onClick={() => void handleConfirmPageDeletion()}
+              >
+                {isDeletingPage ? "Deleting…" : "Delete page"}
+              </button>
             </div>
-            {caretPosition && (
-              <span
-                className="composer__caret"
-                aria-hidden="true"
-                style={{
-                  left: caretPosition.left,
-                  top: caretPosition.top,
-                  height: caretPosition.height,
-                }}
-              />
-            )}
-            <textarea
-              ref={textareaRef}
-              className="composer__input"
-              placeholder="Start writing, or type @ to mention…"
-              value={value}
-              onChange={handleChange}
-              onFocus={() => setIsEditorFocused(true)}
-              onBlur={() => setIsEditorFocused(false)}
-              onClick={syncCursorPosition}
-              onKeyUp={syncCursorPosition}
-              onSelect={syncCursorPosition}
-              onScroll={syncCursorPosition}
-              onKeyDown={handleKeyDown}
-              rows={3}
-              autoFocus
-              aria-label="Document content"
-              aria-autocomplete="list"
-              aria-controls={isMenuOpen ? "mention-menu" : undefined}
-              aria-activedescendant={
-                isMenuOpen && menuOptions.length > 0 ? `mention-option-${activeIndex}` : undefined
-              }
-            />
-            {isMenuOpen && (
-              <MentionMenu
-                results={results}
-                activeIndex={activeIndex}
-                expandedPeople={expandedPeople}
-                expandedPages={expandedPages}
-                query={query ?? undefined}
-                onActiveIndexChange={handleActiveIndexChange}
-                onSelect={handleSelect}
-                onExpand={handleExpand}
-                onCreatePage={handleCreatePage}
-                position={menuPosition}
-              />
-            )}
-          </div>
+          </section>
         </div>
-      </section>
+      )}
     </main>
   );
 }

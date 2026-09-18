@@ -1,16 +1,15 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
 import { chaos } from "../chaos.js";
+import { minimumPageScore, rankPages, toPageSearchResult } from "../pageSearch.js";
 import type { Page, PageSearchResult } from "../types.js";
 
 const DEFAULT_LIMIT = 15;
 const MAX_LIMIT = 50;
 
-type ScoredPage = { page: Page; score: number; titleMatchPosition: number; tokenCoverage: number };
-
 /**
- * Search titles and body content across all available pages without an arbitrary candidate limit,
- * rank candidates locally, and support creating new pages.
+ * Search titles and body content across all available pages, then delegate
+ * relevance ranking and result shaping to pageSearch.ts.
  */
 export function createPagesRouter(db: Database.Database): Router {
   const router = Router();
@@ -45,7 +44,7 @@ export function createPagesRouter(db: Database.Database): Router {
     const filtered = query.trim()
       ? ranked.filter(({ score }) => score >= minimumPageScore(query))
       : ranked;
-    const results = filtered.slice(0, limit).map(({ page }) => toSearchResult(page));
+    const results = filtered.slice(0, limit).map(({ page }) => toPageSearchResult(page));
     res.json({ results });
   });
 
@@ -80,116 +79,22 @@ export function createPagesRouter(db: Database.Database): Router {
     }
   });
 
+  router.delete("/:id", (req, res) => {
+    const id = req.params.id;
+    if (!id) {
+      res.status(400).json({ error: "Page ID is required" });
+      return;
+    }
+
+    const result = db.prepare("DELETE FROM pages WHERE id = ?").run(id);
+    if (result.changes === 0) {
+      res.status(404).json({ error: "Page not found" });
+      return;
+    }
+    res.status(204).end();
+  });
+
   return router;
-}
-
-/**
- * Calculates the minimum score required for a page candidate to be returned,
- * preventing noisy low-relevance results on short queries.
- */
-function minimumPageScore(query: string): number {
-  const length = normalize(query).length;
-  if (length <= 1) return 500;
-  if (length === 2) return 350;
-  return 100;
-}
-
-/**
- * Rank typed page candidates and remove pages with no meaningful match.
- * For empty queries, orders pages by observable edit freshness.
- */
-export function rankPages(pages: Page[], query: string): ScoredPage[] {
-  const normalizedQuery = normalize(query);
-  if (!normalizedQuery) {
-    return pages
-      .map((page) => ({ page, score: 0, titleMatchPosition: 0, tokenCoverage: 0 }))
-      .sort((a, b) => compareRecentPages(a.page, b.page));
-  }
-
-  return pages
-    .map((page) => scorePage(page, normalizedQuery))
-    .filter(({ score }) => score > 0)
-    .sort(
-      (a, b) =>
-        b.score - a.score ||
-        a.titleMatchPosition - b.titleMatchPosition ||
-        b.tokenCoverage - a.tokenCoverage ||
-        comparePages(a.page, b.page),
-    );
-}
-
-/**
- * Computes a tiered relevance score and match metrics for an individual page candidate.
- */
-function scorePage(page: Page, query: string): ScoredPage {
-  const title = normalize(page.title);
-  const content = normalize(page.content);
-  const queryTokens = tokenize(query);
-  const titleTokens = tokenize(page.title);
-  const contentTokens = tokenize(page.content);
-  const titleMatchPosition = title.indexOf(query);
-  const titleCoverage = countMatchingTokens(queryTokens, titleTokens);
-  const contentCoverage = countMatchingTokens(queryTokens, contentTokens);
-  const allTitleTokens = queryTokens.length > 0 && titleCoverage === queryTokens.length;
-  const allContentTokens = queryTokens.length > 0 && contentCoverage === queryTokens.length;
-
-  let score = 0;
-  if (title === query) score = 1000;
-  else if (title.startsWith(query)) score = 800;
-  else if (allTitleTokens) score = 650;
-  else if (titleMatchPosition >= 0) score = 500;
-  else if (content.includes(query)) score = 350;
-  else if (allContentTokens) score = 200;
-  else if (contentCoverage > 0) score = 100;
-
-  return {
-    page,
-    score,
-    titleMatchPosition: titleMatchPosition < 0 ? Number.MAX_SAFE_INTEGER : titleMatchPosition,
-    tokenCoverage: Math.max(titleCoverage, contentCoverage),
-  };
-}
-
-/** Converts a raw Page record to a typed PageSearchResult. */
-function toSearchResult(page: Page): PageSearchResult {
-  return { ...page, type: "page" };
-}
-
-/** Counts how many query tokens match the prefix of any token in the candidate text. */
-function countMatchingTokens(queryTokens: string[], candidateTokens: string[]): number {
-  return queryTokens.filter((queryToken) =>
-    candidateTokens.some((candidateToken) => candidateToken.startsWith(queryToken)),
-  ).length;
-}
-
-/** Deterministic comparator for stable ordering by title and page ID. */
-function comparePages(a: Page, b: Page): number {
-  return a.title.localeCompare(b.title) || a.id.localeCompare(b.id);
-}
-
-/** Order the empty-query page menu by observable freshness, then stable fields. */
-function compareRecentPages(a: Page, b: Page): number {
-  return (
-    b.lastEditedTime.localeCompare(a.lastEditedTime) ||
-    b.createdTime.localeCompare(a.createdTime) ||
-    comparePages(a, b)
-  );
-}
-
-/** Normalizes a string by lowercasing, stripping accents, and trimming whitespace. */
-function normalize(value: string): string {
-  return value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase()
-    .trim();
-}
-
-/** Tokenizes input text into alphanumeric word tokens. */
-function tokenize(value: string): string[] {
-  return normalize(value)
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
 }
 
 /** Extracts a single string from a query parameter. */

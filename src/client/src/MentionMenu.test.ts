@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildMenuOptions, MAX_COMPACTED, sectionView, VISIBLE_PER_SECTION } from "./MentionMenu";
+import {
+  buildMenuOptions,
+  MAX_COMPACTED,
+  sectionView,
+  VISIBLE_PER_SECTION,
+} from "./mentionMenuModel";
 import type { MentionResult } from "./types";
 
 const person = (id: string): MentionResult => ({
