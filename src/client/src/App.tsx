@@ -1,121 +1,23 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { searchPages, searchPeople } from "./api";
 import { buildMenuOptions, MentionMenu, type OverflowSection } from "./MentionMenu";
+import {
+  findCommonSuffix,
+  findEditStart,
+  MENTION_RE,
+  renderFormattedValue,
+  renderPreviewValue,
+  resultLabel,
+  type CommittedMention,
+} from "./mentionUtils";
+import { useCaretPosition } from "./useCaretPosition";
 import type { MentionResult } from "./types";
 import "./App.css";
 
-// Search the complete phrase after the latest @ so multi-word names work.
-const MENTION_RE = /@([^@]*)$/;
 const QUERY_DEBOUNCE_MS = 125;
-const MENU_MAX_HEIGHT_PX = 320;
-const MENU_GAP_PX = 6;
 
 type EmptyResults = { people: MentionResult[]; pages: MentionResult[] };
-type CommittedMention = { start: number; end: number; text: string };
-type CaretPosition = { left: number; top: number; height: number };
 let emptyResultsPromise: Promise<EmptyResults> | undefined;
-
-function findEditStart(previousValue: string, nextValue: string): number {
-  let index = 0;
-  while (
-    index < previousValue.length &&
-    index < nextValue.length &&
-    previousValue[index] === nextValue[index]
-  ) {
-    index += 1;
-  }
-  return index;
-}
-
-function findCommonSuffix(previousValue: string, nextValue: string): number {
-  let count = 0;
-  while (
-    count < previousValue.length &&
-    count < nextValue.length &&
-    previousValue[previousValue.length - count - 1] === nextValue[nextValue.length - count - 1]
-  ) {
-    count += 1;
-  }
-  return count;
-}
-
-function renderFormattedValue(value: string, mentions: CommittedMention[]): ReactNode[] {
-  const validMentions = mentions
-    .filter((mention) => value.slice(mention.start, mention.end) === mention.text)
-    .sort((a, b) => a.start - b.start);
-  const parts: ReactNode[] = [];
-  let cursor = 0;
-
-  for (const mention of validMentions) {
-    if (mention.start < cursor) continue;
-    parts.push(value.slice(cursor, mention.start));
-    parts.push(
-      <strong key={`${mention.start}-${mention.end}`}>
-        {value.slice(mention.start, mention.end - 1)}
-      </strong>,
-    );
-    parts.push(" ");
-    cursor = mention.end;
-  }
-  parts.push(value.slice(cursor));
-  return parts;
-}
-
-function resultLabel(result: MentionResult): string {
-  if (result.type === "page") return `${result.icon} ${result.title}`;
-  if (result.type === "person") return result.name;
-  return result.label;
-}
-
-function renderPreviewValue(
-  value: string,
-  cursorPosition: number,
-  result: MentionResult,
-  mentions: CommittedMention[],
-): ReactNode[] {
-  const match = value.slice(0, cursorPosition).match(MENTION_RE);
-  if (!match || match.index === undefined) return renderFormattedValue(value, mentions);
-
-  const typedMention = value.slice(match.index, cursorPosition);
-  const candidateMention = `@${resultLabel(result)}`;
-  const normalizedTyped = typedMention.toLocaleLowerCase();
-  const normalizedCandidate = candidateMention.toLocaleLowerCase();
-  const completion = normalizedCandidate.startsWith(normalizedTyped)
-    ? candidateMention.slice(typedMention.length)
-    : result.type === "page"
-      ? ` ${resultLabel(result)}`
-      : ` ${resultLabel(result)}`;
-
-  return [
-    ...renderFormattedValue(value.slice(0, match.index), mentions),
-    typedMention,
-    <span className="composer__mention-preview" key="mention-preview">
-      {completion}
-    </span>,
-    value.slice(cursorPosition),
-  ];
-}
-
-function appendFormattedText(container: HTMLElement, value: string, mentions: CommittedMention[]) {
-  const validMentions = mentions
-    .filter(
-      (mention) =>
-        mention.end <= value.length && value.slice(mention.start, mention.end) === mention.text,
-    )
-    .sort((a, b) => a.start - b.start);
-  let cursor = 0;
-
-  for (const mention of validMentions) {
-    if (mention.start < cursor) continue;
-    container.appendChild(document.createTextNode(value.slice(cursor, mention.start)));
-    const strong = document.createElement("strong");
-    strong.textContent = value.slice(mention.start, mention.end - 1);
-    container.appendChild(strong);
-    container.appendChild(document.createTextNode(" "));
-    cursor = mention.end;
-  }
-  container.appendChild(document.createTextNode(value.slice(cursor)));
-}
 
 /** Warm the blank-document menu so the first empty @ can render immediately. */
 function prefetchEmptyResults(): Promise<EmptyResults> {
@@ -139,9 +41,8 @@ export function App() {
   const [cursorPosition, setCursorPosition] = useState(0);
   const [selectionEnd, setSelectionEnd] = useState(0);
   const [isEditorFocused, setIsEditorFocused] = useState(false);
-  const [caretPosition, setCaretPosition] = useState<CaretPosition | null>(null);
   const [previewResult, setPreviewResult] = useState<MentionResult | null>(null);
-  const [menuPosition, setMenuPosition] = useState({ left: 0, top: 0 });
+
   const requestId = useRef(0);
   const committedMentions = useRef<CommittedMention[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -170,61 +71,21 @@ export function App() {
   const isMenuOpen = rawQuery !== null && !/\s$/.test(rawQuery);
   const menuOptions = buildMenuOptions(results, expandedPeople, expandedPages);
 
+  const { caretPosition, menuPosition } = useCaretPosition({
+    textareaRef,
+    composerRef,
+    value,
+    cursorPosition,
+    selectionEnd,
+    isEditorFocused,
+    isMenuOpen,
+    committedMentions: committedMentions.current,
+  });
+
   useEffect(() => {
     const option = menuOptions[activeIndex];
     setPreviewResult(option?.kind === "result" ? option.result : null);
-  }, [activeIndex, expandedPages, expandedPeople, results]);
-
-  useLayoutEffect(() => {
-    if (!textareaRef.current || !composerRef.current) return;
-
-    const textarea = textareaRef.current;
-    const composer = composerRef.current;
-    const computed = window.getComputedStyle(textarea);
-    const textareaRect = textarea.getBoundingClientRect();
-    const mirror = document.createElement("div");
-    const marker = document.createElement("span");
-
-    // Match the textarea's typography and width so the marker follows wrapped
-    // lines and the menu can be positioned below the actual caret.
-    mirror.style.position = "fixed";
-    mirror.style.left = `${textareaRect.left}px`;
-    mirror.style.top = `${textareaRect.top}px`;
-    mirror.style.visibility = "hidden";
-    mirror.style.boxSizing = computed.boxSizing;
-    mirror.style.whiteSpace = "pre-wrap";
-    mirror.style.overflowWrap = "break-word";
-    mirror.style.width = `${textarea.clientWidth}px`;
-    mirror.style.font = computed.font;
-    mirror.style.letterSpacing = computed.letterSpacing;
-    mirror.style.lineHeight = computed.lineHeight;
-    mirror.style.padding = computed.padding;
-    mirror.style.border = computed.border;
-    appendFormattedText(mirror, value.slice(0, cursorPosition), committedMentions.current);
-    marker.textContent = "\u200b";
-    mirror.appendChild(marker);
-    document.body.appendChild(mirror);
-
-    const markerRect = marker.getBoundingClientRect();
-    const composerRect = composer.getBoundingClientRect();
-    const left = Math.max(0, markerRect.left - composerRect.left);
-    const lineTop = markerRect.top - composerRect.top - textarea.scrollTop;
-    const lineBottom = markerRect.bottom - composerRect.top - textarea.scrollTop;
-    const enoughSpaceBelow =
-      window.innerHeight - markerRect.bottom >= MENU_MAX_HEIGHT_PX + MENU_GAP_PX;
-    const enoughSpaceAbove = markerRect.top >= MENU_MAX_HEIGHT_PX + MENU_GAP_PX;
-    const menuTop =
-      enoughSpaceBelow || !enoughSpaceAbove
-        ? lineBottom + MENU_GAP_PX
-        : lineTop - MENU_MAX_HEIGHT_PX - MENU_GAP_PX;
-    if (isMenuOpen) setMenuPosition({ left, top: menuTop });
-    if (isEditorFocused && cursorPosition === selectionEnd) {
-      setCaretPosition({ left, top: lineTop, height: markerRect.height || 24 });
-    } else {
-      setCaretPosition(null);
-    }
-    mirror.remove();
-  }, [cursorPosition, isMenuOpen, value, isEditorFocused, selectionEnd]);
+  }, [activeIndex, expandedPages, expandedPeople, results, menuOptions]);
 
   useEffect(() => {
     void prefetchEmptyResults();
