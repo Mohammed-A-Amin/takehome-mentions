@@ -7,6 +7,8 @@ import "./App.css";
 // Search the complete phrase after the latest @ so multi-word names work.
 const MENTION_RE = /@([^@]*)$/;
 const QUERY_DEBOUNCE_MS = 125;
+const MENU_MAX_HEIGHT_PX = 320;
+const MENU_GAP_PX = 6;
 
 type EmptyResults = { people: MentionResult[]; pages: MentionResult[] };
 type CommittedMention = { start: number; end: number; text: string };
@@ -195,10 +197,16 @@ export function App() {
     const markerRect = marker.getBoundingClientRect();
     const composerRect = composer.getBoundingClientRect();
     const left = Math.max(0, markerRect.left - composerRect.left);
-    const top = markerRect.top - composerRect.top - textarea.scrollTop;
-    if (isMenuOpen) setMenuPosition({ left, top: top + 6 });
+    const lineTop = markerRect.top - composerRect.top - textarea.scrollTop;
+    const lineBottom = markerRect.bottom - composerRect.top - textarea.scrollTop;
+    const enoughSpaceBelow = window.innerHeight - markerRect.bottom >= MENU_MAX_HEIGHT_PX + MENU_GAP_PX;
+    const enoughSpaceAbove = markerRect.top >= MENU_MAX_HEIGHT_PX + MENU_GAP_PX;
+    const menuTop = enoughSpaceBelow || !enoughSpaceAbove
+      ? lineBottom + MENU_GAP_PX
+      : lineTop - MENU_MAX_HEIGHT_PX - MENU_GAP_PX;
+    if (isMenuOpen) setMenuPosition({ left, top: menuTop });
     if (isEditorFocused && cursorPosition === selectionEnd) {
-      setCaretPosition({ left, top, height: markerRect.height || 24 });
+      setCaretPosition({ left, top: lineTop, height: markerRect.height || 24 });
     } else {
       setCaretPosition(null);
     }
