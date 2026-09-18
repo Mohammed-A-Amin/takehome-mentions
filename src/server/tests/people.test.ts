@@ -77,6 +77,24 @@ describe("people ranking", () => {
     expect(results.map((person) => person.name)).toEqual(["Alex Kim"]);
   });
 
+  it("matches related word forms without role-specific aliases", () => {
+    const results = rankPeople(
+      [
+        { ...alex, id: "engineering-team", name: "Arjun Cohen", title: "Engineering Manager" },
+        {
+          ...alex,
+          id: "unrelated-team",
+          name: "Nora Ivanov",
+          title: "Account Manager",
+          team: "Sales",
+        },
+      ],
+      "engineer",
+    );
+
+    expect(results.map((person) => person.name)).toEqual(["Arjun Cohen"]);
+  });
+
   it("prioritizes same team over same title for empty-query recommendations", () => {
     const results = recommendPeople([
       { ...alexandra, id: "same-team", name: "Taylor Chen", team: CURRENT_USER.team },
@@ -84,6 +102,21 @@ describe("people ranking", () => {
       { ...samAlex, id: "unrelated", name: "Sam Alex", team: "People" },
     ]);
     expect(results.map((person) => person.name)).toEqual(["Taylor Chen", "Jordan Kim", "Sam Alex"]);
+  });
+
+  it("uses generic cross-field role overlap as a secondary signal", () => {
+    const results = recommendPeople([
+      { ...samAlex, id: "unrelated", name: "Jordan Lee", title: "Recruiter", team: "Sales" },
+      {
+        ...samAlex,
+        id: "related",
+        name: "Arjun Cohen",
+        title: "Engineering Manager",
+        team: "Product",
+      },
+    ]);
+
+    expect(results.map((person) => person.name)).toEqual(["Arjun Cohen", "Jordan Lee"]);
   });
 });
 

@@ -1,22 +1,19 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
 import { chaos } from "../chaos.js";
+import { minimumPageScore, rankPages, toPageSearchResult } from "../pageSearch.js";
 import type { Page, PageSearchResult } from "../types.js";
 
 const DEFAULT_LIMIT = 15;
 const MAX_LIMIT = 50;
-const CANDIDATE_LIMIT = 100;
-
-type ScoredPage = { page: Page; score: number; titleMatchPosition: number; tokenCoverage: number };
 
 /**
- * Search titles and body content, then rank candidates locally. Title matches
- * deliberately outweigh content-only matches so an exact page name remains
- * easy to find among broad body-text results.
+ * Search titles and body content across all available pages, then delegate
+ * relevance ranking and result shaping to pageSearch.ts.
  */
 export function createPagesRouter(db: Database.Database): Router {
   const router = Router();
-  const search = db.prepare<[string, string, number]>(`
+  const search = db.prepare<[string, string]>(`
     SELECT
       id,
       title,
@@ -27,7 +24,11 @@ export function createPagesRouter(db: Database.Database): Router {
     FROM pages
     WHERE lower(title) LIKE '%' || lower(?) || '%' ESCAPE char(92)
        OR lower(content) LIKE '%' || lower(?) || '%' ESCAPE char(92)
-    LIMIT ?
+  `);
+
+  const insertPage = db.prepare<[string, string, string, string, string, string]>(`
+    INSERT INTO pages (id, title, icon, content, created_time, last_edited_time)
+    VALUES (?, ?, ?, ?, ?, ?)
   `);
 
   router.get("/", chaos("pages"), (req, res) => {
@@ -38,112 +39,77 @@ export function createPagesRouter(db: Database.Database): Router {
       return;
     }
     const escapedQuery = escapeLike(query);
-    const rows = search.all(escapedQuery, escapedQuery, CANDIDATE_LIMIT) as Page[];
+    const rows = search.all(escapedQuery, escapedQuery) as Page[];
     const ranked = rankPages(rows, query);
-    const results = ranked.slice(0, limit).map(({ page }) => toSearchResult(page));
+    const filtered = query.trim()
+      ? ranked.filter(({ score }) => score >= minimumPageScore(query))
+      : ranked;
+    const results = filtered.slice(0, limit).map(({ page }) => toPageSearchResult(page));
     res.json({ results });
+  });
+
+  router.post("/", (req, res) => {
+    const rawTitle = req.body?.title;
+    if (typeof rawTitle !== "string" || !rawTitle.trim()) {
+      res.status(400).json({ error: "Title is required and must be a non-empty string" });
+      return;
+    }
+
+    const title = rawTitle.trim();
+    const icon =
+      typeof req.body?.icon === "string" && req.body.icon.trim() ? req.body.icon.trim() : "📄";
+    const content = typeof req.body?.content === "string" ? req.body.content : "";
+    const id = `page_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const now = new Date().toISOString();
+
+    try {
+      insertPage.run(id, title, icon, content, now, now);
+      const newPage: PageSearchResult = {
+        id,
+        title,
+        icon,
+        content,
+        createdTime: now,
+        lastEditedTime: now,
+        type: "page",
+      };
+      res.status(201).json(newPage);
+    } catch {
+      res.status(500).json({ error: "Failed to create page in database" });
+    }
+  });
+
+  router.delete("/:id", (req, res) => {
+    const id = req.params.id;
+    if (!id) {
+      res.status(400).json({ error: "Page ID is required" });
+      return;
+    }
+
+    const result = db.prepare("DELETE FROM pages WHERE id = ?").run(id);
+    if (result.changes === 0) {
+      res.status(404).json({ error: "Page not found" });
+      return;
+    }
+    res.status(204).end();
   });
 
   return router;
 }
 
-/** Rank typed page candidates and remove pages with no meaningful match. */
-export function rankPages(pages: Page[], query: string): ScoredPage[] {
-  const normalizedQuery = normalize(query);
-  if (!normalizedQuery) {
-    return pages
-      .map((page) => ({ page, score: 0, titleMatchPosition: 0, tokenCoverage: 0 }))
-      .sort((a, b) => compareRecentPages(a.page, b.page));
-  }
-
-  return pages
-    .map((page) => scorePage(page, normalizedQuery))
-    .filter(({ score }) => score > 0)
-    .sort(
-      (a, b) =>
-        b.score - a.score ||
-        a.titleMatchPosition - b.titleMatchPosition ||
-        b.tokenCoverage - a.tokenCoverage ||
-        comparePages(a.page, b.page),
-    );
-}
-
-function scorePage(page: Page, query: string): ScoredPage {
-  const title = normalize(page.title);
-  const content = normalize(page.content);
-  const queryTokens = tokenize(query);
-  const titleTokens = tokenize(page.title);
-  const contentTokens = tokenize(page.content);
-  const titleMatchPosition = title.indexOf(query);
-  const titleCoverage = countMatchingTokens(queryTokens, titleTokens);
-  const contentCoverage = countMatchingTokens(queryTokens, contentTokens);
-  const allTitleTokens = queryTokens.length > 0 && titleCoverage === queryTokens.length;
-  const allContentTokens = queryTokens.length > 0 && contentCoverage === queryTokens.length;
-
-  let score = 0;
-  if (title === query) score = 1000;
-  else if (title.startsWith(query)) score = 800;
-  else if (allTitleTokens) score = 650;
-  else if (titleMatchPosition >= 0) score = 500;
-  else if (content.includes(query)) score = 350;
-  else if (allContentTokens) score = 200;
-  else if (contentCoverage > 0) score = 100;
-
-  return {
-    page,
-    score,
-    titleMatchPosition: titleMatchPosition < 0 ? Number.MAX_SAFE_INTEGER : titleMatchPosition,
-    tokenCoverage: Math.max(titleCoverage, contentCoverage),
-  };
-}
-
-function toSearchResult(page: Page): PageSearchResult {
-  return { ...page, type: "page" };
-}
-
-function countMatchingTokens(queryTokens: string[], candidateTokens: string[]): number {
-  return queryTokens.filter((queryToken) =>
-    candidateTokens.some((candidateToken) => candidateToken.startsWith(queryToken)),
-  ).length;
-}
-
-function comparePages(a: Page, b: Page): number {
-  return a.title.localeCompare(b.title) || a.id.localeCompare(b.id);
-}
-
-/** Order the empty-query page menu by observable freshness, then stable fields. */
-function compareRecentPages(a: Page, b: Page): number {
-  return (
-    b.lastEditedTime.localeCompare(a.lastEditedTime) ||
-    b.createdTime.localeCompare(a.createdTime) ||
-    comparePages(a, b)
-  );
-}
-
-function normalize(value: string): string {
-  return value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase()
-    .trim();
-}
-
-function tokenize(value: string): string[] {
-  return normalize(value)
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
-}
-
+/** Extracts a single string from a query parameter. */
 function firstString(value: unknown): string | undefined {
   if (typeof value === "string") return value;
   if (Array.isArray(value) && typeof value[0] === "string") return value[0];
   return undefined;
 }
 
+/** Escapes SQLite LIKE wildcards (% and _) and the backslash escape character. */
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, "\\$&");
 }
 
+/** Clamps client-requested limits to a valid positive range up to MAX_LIMIT. */
 function clampLimit(raw: string | undefined): number {
   const parsed = raw !== undefined ? Number.parseInt(raw, 10) : NaN;
   if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_LIMIT;

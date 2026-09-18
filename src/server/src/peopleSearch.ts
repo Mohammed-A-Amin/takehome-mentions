@@ -37,7 +37,7 @@ export function rankPeople(
       lexicalScore: typedScore(person, normalizedQuery),
       similarity: similarityScore(person, currentUser),
     }))
-    .filter(({ lexicalScore }) => lexicalScore > 0)
+    .filter(({ lexicalScore }) => lexicalScore >= minimumTypedScore(normalizedQuery))
     .sort(
       (a, b) =>
         b.lexicalScore - a.lexicalScore ||
@@ -78,6 +78,8 @@ export function similarityScore(person: Person, currentUser: CurrentUser): numbe
   const userTitle = tokenize(currentUser.title);
   const sharedTeamTokens = intersectionSize(personTeam, userTeam);
   const sharedTitleTokens = intersectionSize(personTitle, userTitle);
+  const sharedCrossFieldTokens =
+    intersectionSize(personTeam, userTitle) + intersectionSize(personTitle, userTeam);
 
   let score = 0;
   if (normalize(person.team) === normalize(currentUser.team) && person.team) score += 100;
@@ -85,6 +87,8 @@ export function similarityScore(person: Person, currentUser: CurrentUser): numbe
 
   if (normalize(person.title) === normalize(currentUser.title) && person.title) score += 60;
   else score += Math.min(sharedTitleTokens * 20, 40);
+
+  score += Math.min(sharedCrossFieldTokens * 20, 20);
 
   return score;
 }
@@ -97,16 +101,14 @@ function typedScore(person: Person, query: string): number {
   const email = normalize(person.email);
   const title = normalize(person.title);
   const team = normalize(person.team);
-  const nameTokens = tokenize(person.name);
   const queryTokens = tokenize(query);
+  const nameTokens = tokenize(person.name);
   const titleTokens = tokenize(person.title);
+  const teamTokens = tokenize(person.team);
 
   if (name === query) return 1000;
   if (name.startsWith(query)) return 900 - query.length;
-  if (
-    queryTokens.length > 0 &&
-    queryTokens.every((token) => nameTokens.some((nameToken) => nameToken.startsWith(token)))
-  ) {
+  if (queryTokens.length > 0 && tokensMatch(queryTokens, nameTokens)) {
     return 800 - query.length;
   }
 
@@ -114,10 +116,28 @@ function typedScore(person: Person, query: string): number {
   if (nameIndex >= 0) return 700 - nameIndex;
   if (team === query) return 600;
   if (title.startsWith(query)) return 500 - query.length;
-  if (titleTokens.some((token) => token.startsWith(query))) return 500 - query.length;
+  if (queryTokens.length > 0 && tokensMatch(queryTokens, titleTokens)) return 500 - query.length;
   if (email.includes(query)) return 400 - email.indexOf(query);
-  if (team.includes(query) || title.includes(query)) return 300;
+  if (
+    (queryTokens.length > 0 && tokensMatch(queryTokens, teamTokens)) ||
+    team.includes(query) ||
+    title.includes(query)
+  ) {
+    return 300;
+  }
   return 0;
+}
+
+function minimumTypedScore(query: string): number {
+  if (query.length <= 1) return 500;
+  if (query.length === 2) return 400;
+  return 300;
+}
+
+function tokensMatch(queryTokens: string[], candidateTokens: string[]): boolean {
+  return queryTokens.every((queryToken) =>
+    candidateTokens.some((candidateToken) => candidateToken.startsWith(queryToken)),
+  );
 }
 
 /** Add the discriminant required by the client's MentionResult union. */
@@ -143,7 +163,15 @@ function normalize(value: string): string {
 function tokenize(value: string): string[] {
   return normalize(value)
     .split(/[^a-z0-9]+/)
-    .filter(Boolean);
+    .filter(Boolean)
+    .map(stemToken);
+}
+
+function stemToken(token: string): string {
+  if (token.length > 6 && token.endsWith("ing")) return token.slice(0, -3);
+  if (token.length > 5 && token.endsWith("ed")) return token.slice(0, -2);
+  if (token.length > 4 && token.endsWith("ies")) return `${token.slice(0, -3)}y`;
+  return token;
 }
 
 /** Count distinct tokens shared by two normalized token lists. */
