@@ -16,6 +16,7 @@ import {
   type CommittedMention,
 } from "../features/mentions/model/mentionUtils";
 import { useCaretPosition } from "../features/mentions/hooks/useCaretPosition";
+import { useAutoGrowTextarea } from "../features/mentions/hooks/useAutoGrowTextarea";
 import {
   prefetchEmptyResults,
   useMentionSearch,
@@ -61,7 +62,12 @@ export function App() {
   const rawQuery = match ? match[1] : null;
   const query = rawQuery === null ? null : rawQuery.trim();
   const isMenuOpen = rawQuery !== null && !/\s$/.test(rawQuery);
-  const { results, refresh: refreshMentionResults } = useMentionSearch({ isMenuOpen, query });
+  const {
+    results,
+    refresh: refreshMentionResults,
+    removeResult: removeMentionResult,
+    restoreResult: restoreMentionResult,
+  } = useMentionSearch({ isMenuOpen, query });
   const menuOptions = buildMenuOptions(results, expandedPeople, expandedPages, query ?? undefined);
 
   const { caretPosition, menuPosition } = useCaretPosition({
@@ -74,6 +80,7 @@ export function App() {
     isMenuOpen,
     committedMentions: committedMentions.current,
   });
+  useAutoGrowTextarea(textareaRef, value);
 
   useEffect(() => {
     const option = menuOptions[activeIndex];
@@ -144,27 +151,29 @@ export function App() {
 
   async function handleConfirmPageDeletion() {
     if (!pagePendingDeletion) return;
+    const deletedPage = pagePendingDeletion;
     setIsDeletingPage(true);
     setDeleteError(null);
+    removeMentionResult(deletedPage.id);
     try {
-      await deletePage(pagePendingDeletion.id);
+      await deletePage(deletedPage.id);
       const removal = removePageMentions(
         value,
         committedMentions.current,
-        pagePendingDeletion.id,
+        deletedPage.id,
         cursorPosition,
       );
       setValue(removal.value);
       setCursorPosition(removal.position);
       setSelectionEnd(removal.position);
       committedMentions.current = removal.mentions;
-      void prefetchEmptyResults(true);
-      refreshMentionResults();
+      void prefetchEmptyResults(true).then(refreshMentionResults);
       setPagePendingDeletion(null);
       requestAnimationFrame(() => {
         textareaRef.current?.setSelectionRange(removal.position, removal.position);
       });
     } catch {
+      restoreMentionResult(deletedPage);
       setDeleteError("Could not delete this page. Please try again.");
     } finally {
       setIsDeletingPage(false);

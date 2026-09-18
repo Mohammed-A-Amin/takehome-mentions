@@ -127,6 +127,7 @@ body {
   padding: 0;
   border: none;
   resize: vertical;
+  overflow-y: hidden;
   outline: none;
   font-family: inherit;
   font-weight: 400;

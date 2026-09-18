@@ -30,6 +30,11 @@ export function useMentionSearch({ isMenuOpen, query }: UseMentionSearchOptions)
   const [results, setResults] = useState<MentionResult[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const requestId = useRef(0);
+  const hiddenResultIds = useRef(new Set<string>());
+
+  const publishResults = (nextResults: MentionResult[]) => {
+    setResults(nextResults.filter((result) => !hiddenResultIds.current.has(result.id)));
+  };
 
   useEffect(() => {
     void prefetchEmptyResults();
@@ -44,7 +49,7 @@ export function useMentionSearch({ isMenuOpen, query }: UseMentionSearchOptions)
     const currentRequestId = ++requestId.current;
     if (query === "") {
       void prefetchEmptyResults().then(({ people, pages }) => {
-        if (currentRequestId === requestId.current) setResults([...people, ...pages]);
+        if (currentRequestId === requestId.current) publishResults([...people, ...pages]);
       });
       return;
     }
@@ -55,7 +60,7 @@ export function useMentionSearch({ isMenuOpen, query }: UseMentionSearchOptions)
       let nextPages: MentionResult[] = [];
       const publish = () => {
         if (controller.signal.aborted || currentRequestId !== requestId.current) return;
-        setResults([...nextPeople, ...nextPages]);
+        publishResults([...nextPeople, ...nextPages]);
       };
 
       void searchPeople(query, controller.signal)
@@ -78,5 +83,18 @@ export function useMentionSearch({ isMenuOpen, query }: UseMentionSearchOptions)
     };
   }, [isMenuOpen, query, refreshKey]);
 
-  return { results, refresh: () => setRefreshKey((key) => key + 1) };
+  return {
+    results,
+    refresh: () => setRefreshKey((key) => key + 1),
+    removeResult: (id: string) => {
+      hiddenResultIds.current.add(id);
+      setResults((current) => current.filter((result) => result.id !== id));
+    },
+    restoreResult: (result: MentionResult) => {
+      hiddenResultIds.current.delete(result.id);
+      setResults((current) =>
+        current.some((existing) => existing.id === result.id) ? current : [...current, result],
+      );
+    },
+  };
 }
