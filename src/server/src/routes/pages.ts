@@ -40,11 +40,21 @@ export function createPagesRouter(db: Database.Database): Router {
     const escapedQuery = escapeLike(query);
     const rows = search.all(escapedQuery, escapedQuery, CANDIDATE_LIMIT) as Page[];
     const ranked = rankPages(rows, query);
-    const results = ranked.slice(0, limit).map(({ page }) => toSearchResult(page));
+    const filtered = query.trim()
+      ? ranked.filter(({ score }) => score >= minimumPageScore(query))
+      : ranked;
+    const results = filtered.slice(0, limit).map(({ page }) => toSearchResult(page));
     res.json({ results });
   });
 
   return router;
+}
+
+function minimumPageScore(query: string): number {
+  const length = normalize(query).length;
+  if (length <= 1) return 500;
+  if (length === 2) return 350;
+  return 100;
 }
 
 /** Rank typed page candidates and remove pages with no meaningful match. */

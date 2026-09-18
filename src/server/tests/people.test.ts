@@ -77,6 +77,24 @@ describe("people ranking", () => {
     expect(results.map((person) => person.name)).toEqual(["Alex Kim"]);
   });
 
+  it("matches related word forms without role-specific aliases", () => {
+    const results = rankPeople(
+      [
+        { ...alex, id: "engineering-team", name: "Arjun Cohen", title: "Engineering Manager" },
+        {
+          ...alex,
+          id: "unrelated-team",
+          name: "Nora Ivanov",
+          title: "Account Manager",
+          team: "Sales",
+        },
+      ],
+      "engineer",
+    );
+
+    expect(results.map((person) => person.name)).toEqual(["Arjun Cohen"]);
+  });
+
   it("prioritizes same team over same title for empty-query recommendations", () => {
     const results = recommendPeople([
       { ...alexandra, id: "same-team", name: "Taylor Chen", team: CURRENT_USER.team },

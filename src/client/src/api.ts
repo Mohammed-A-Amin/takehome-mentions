@@ -2,6 +2,11 @@ import type { PageResult, PersonResult } from "./types";
 
 const API_BASE = "/api";
 const TYPED_LIMIT = 20;
+const SHORT_QUERY_LIMIT = 8;
+
+function typedLimit(query: string): number {
+  return query.trim().length <= 1 ? SHORT_QUERY_LIMIT : TYPED_LIMIT;
+}
 
 function searchUrl(path: string, query: string, limit?: number): string {
   const params = new URLSearchParams({ q: query });
@@ -11,7 +16,7 @@ function searchUrl(path: string, query: string, limit?: number): string {
 
 /** Search local pages while allowing the caller to cancel stale keystroke work. */
 export async function searchPages(query: string, signal?: AbortSignal): Promise<PageResult[]> {
-  const limit = query.trim() ? TYPED_LIMIT : undefined;
+  const limit = query.trim() ? typedLimit(query) : undefined;
   const res = await fetch(searchUrl("pages", query, limit), { signal });
   if (!res.ok) throw new Error(`pages search failed: ${res.status}`);
   const data = (await res.json()) as { results?: PageResult[] };
@@ -20,7 +25,7 @@ export async function searchPages(query: string, signal?: AbortSignal): Promise<
 
 /** Search the local ranked People proxy with optional stale-request cancellation. */
 export async function searchPeople(query: string, signal?: AbortSignal): Promise<PersonResult[]> {
-  const limit = query.trim() ? TYPED_LIMIT : undefined;
+  const limit = query.trim() ? typedLimit(query) : undefined;
   const res = await fetch(searchUrl("people", query, limit), { signal });
   if (!res.ok) throw new Error(`people search failed: ${res.status}`);
   const data = (await res.json()) as { results?: PersonResult[] };
