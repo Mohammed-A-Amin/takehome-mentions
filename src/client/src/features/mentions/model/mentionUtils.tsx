@@ -8,6 +8,14 @@ export type CommittedMention = {
   end: number;
   text: string;
   type?: "person" | "page" | "date";
+  /** Stable result ID, used to remove mentions when their backing page is deleted. */
+  resultId?: string;
+};
+
+export type MentionRemoval = {
+  value: string;
+  mentions: CommittedMention[];
+  position: number;
 };
 
 /**
@@ -59,6 +67,66 @@ export function resultLabel(result: MentionResult): string {
 export function mentionInsertionText(result: MentionResult): string {
   const label = resultLabel(result);
   return result.type === "person" ? `@${label} ` : `${label} `;
+}
+
+/**
+ * Remove every valid committed page mention for a deleted page and rebase the
+ * surviving mention ranges. The document stores visible text rather than rich
+ * text nodes, so this keeps the text and its mention metadata in sync.
+ */
+export function removePageMentions(
+  value: string,
+  mentions: CommittedMention[],
+  pageId: string,
+  position: number,
+): MentionRemoval {
+  const validMentions = mentions
+    .filter(
+      (mention) =>
+        mention.end <= value.length && value.slice(mention.start, mention.end) === mention.text,
+    )
+    .sort((a, b) => a.start - b.start);
+  const removedMentions = validMentions.filter(
+    (mention) => mention.type === "page" && mention.resultId === pageId,
+  );
+  if (removedMentions.length === 0) return { value, mentions: validMentions, position };
+
+  let nextValue = "";
+  let sourceCursor = 0;
+  const nextMentions: CommittedMention[] = [];
+
+  for (const mention of validMentions) {
+    if (mention.start < sourceCursor) continue;
+    nextValue += value.slice(sourceCursor, mention.start);
+    const shouldRemove = mention.type === "page" && mention.resultId === pageId;
+    if (!shouldRemove) {
+      const start = nextValue.length;
+      nextValue += mention.text;
+      nextMentions.push({ ...mention, start, end: nextValue.length });
+    }
+    sourceCursor = mention.end;
+  }
+  nextValue += value.slice(sourceCursor);
+
+  return {
+    value: nextValue,
+    mentions: nextMentions,
+    position: rebasePosition(position, removedMentions),
+  };
+}
+
+/** Rebase a text position after one or more ranges have been removed. */
+function rebasePosition(position: number, removedMentions: CommittedMention[]): number {
+  let removedBefore = 0;
+  for (const mention of removedMentions) {
+    if (position >= mention.end) {
+      removedBefore += mention.end - mention.start;
+      continue;
+    }
+    if (position > mention.start) return mention.start - removedBefore;
+    break;
+  }
+  return position - removedBefore;
 }
 
 /**

@@ -10,6 +10,7 @@ import {
   findEditStart,
   MENTION_RE,
   mentionInsertionText,
+  removePageMentions,
   renderFormattedValue,
   renderPreviewValue,
   type CommittedMention,
@@ -103,6 +104,7 @@ export function App() {
       end: nextCursorPosition,
       text: mentionText,
       type: result.type,
+      resultId: result.id,
     };
     committedMentions.current = [
       ...committedMentions.current.filter((mention) => mention.end <= mentionStart),
@@ -146,9 +148,22 @@ export function App() {
     setDeleteError(null);
     try {
       await deletePage(pagePendingDeletion.id);
+      const removal = removePageMentions(
+        value,
+        committedMentions.current,
+        pagePendingDeletion.id,
+        cursorPosition,
+      );
+      setValue(removal.value);
+      setCursorPosition(removal.position);
+      setSelectionEnd(removal.position);
+      committedMentions.current = removal.mentions;
       void prefetchEmptyResults(true);
       refreshMentionResults();
       setPagePendingDeletion(null);
+      requestAnimationFrame(() => {
+        textareaRef.current?.setSelectionRange(removal.position, removal.position);
+      });
     } catch {
       setDeleteError("Could not delete this page. Please try again.");
     } finally {
