@@ -1,9 +1,9 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import type Database from "better-sqlite3";
-import { openDb } from "./db.js";
-import { createPagesRouter } from "./routes/pages.js";
-import { createPeopleRouter } from "./routes/people.js";
+import { createPagesRouter } from "../features/pages/router.js";
+import { createPeopleRouter } from "../features/people/router.js";
+import { openDb } from "../shared/db/db.js";
 
 /** Build the Express app. Pass a db handle in tests; defaults to the local one. */
 export function createApp(

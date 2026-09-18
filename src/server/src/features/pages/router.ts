@@ -1,8 +1,8 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
-import { chaos } from "../chaos.js";
-import { minimumPageScore, rankPages, toPageSearchResult } from "../pageSearch.js";
-import type { Page, PageSearchResult } from "../types.js";
+import { chaos } from "../../shared/http/chaos.js";
+import type { Page, PageSearchResult } from "../../shared/types.js";
+import { minimumPageScore, rankPages, toPageSearchResult } from "./search.js";
 
 const DEFAULT_LIMIT = 15;
 const MAX_LIMIT = 50;

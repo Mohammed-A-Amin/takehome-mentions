@@ -1,4 +1,4 @@
-import type { PageSearchResult, PersonSearchResult } from "@server/types";
+import type { PageSearchResult, PersonSearchResult } from "@server/shared/types";
 
 /**
  * The kinds of things the @ menu can surface. Pages and people come from the

@@ -11,7 +11,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
  * openDb() is called.
  */
 export function resolveDbPath(): string {
-  return process.env.NOTION_TH_DB_PATH ?? path.join(here, "..", "data", "app.db");
+  return process.env.NOTION_TH_DB_PATH ?? path.join(here, "..", "..", "data", "app.db");
 }
 
 /** Open the database, creating the schema if it does not yet exist. */
@@ -28,7 +28,7 @@ export function openDb(): Database.Database {
  * Create the tables candidates work against. Safe to call repeatedly.
  *
  * Pages only — people are not stored locally. They come from the hosted
- * directory that `/api/people` is meant to sit in front of (see routes/people.ts).
+ * directory that `/api/people` is meant to sit in front of (see features/people/router.ts).
  */
 export function ensureSchema(db: Database.Database): void {
   db.exec(`

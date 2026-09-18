@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "seed": "tsx src/seed.ts",
+    "dev": "tsx watch src/app/index.ts",
+    "seed": "tsx src/shared/db/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit --project tsconfig.tests.json"

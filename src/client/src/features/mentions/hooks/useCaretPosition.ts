@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState, type RefObject } from "react";
-import { appendFormattedText, type CommittedMention } from "./mentionUtils";
+import { appendFormattedText, type CommittedMention } from "../model/mentionUtils";
 
 const MENU_MAX_HEIGHT_PX = 320;
 const MENU_GAP_PX = 6;

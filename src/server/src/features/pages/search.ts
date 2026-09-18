@@ -1,4 +1,4 @@
-import type { Page, PageSearchResult } from "./types.js";
+import type { Page, PageSearchResult } from "../../shared/types.js";
 
 export type ScoredPage = {
   page: Page;

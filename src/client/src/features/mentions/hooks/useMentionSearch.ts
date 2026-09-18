@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { searchPages, searchPeople } from "./api";
-import type { MentionResult } from "./types";
+import { searchPages, searchPeople } from "../api";
+import type { MentionResult } from "../types";
 
 const QUERY_DEBOUNCE_MS = 125;
 
