@@ -11,7 +11,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
  * openDb() is called.
  */
 export function resolveDbPath(): string {
-  return process.env.NOTION_TH_DB_PATH ?? path.join(here, "..", "..", "data", "app.db");
+  return process.env.NOTION_TH_DB_PATH ?? path.join(here, "..", "..", "..", "data", "app.db");
 }
 
 /** Open the database, creating the schema if it does not yet exist. */
