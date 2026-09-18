@@ -39,6 +39,16 @@ export function resultLabel(result: MentionResult): string {
   return result.label;
 }
 
+/**
+ * Returns the text to insert when a mention candidate is selected.
+ * People include the leading '@' (e.g. '@Taylor Chen '), whereas Pages
+ * and other entities do not include the '@' (e.g. '📄 Project Roadmap ').
+ */
+export function mentionInsertionText(result: MentionResult): string {
+  const label = resultLabel(result);
+  return result.type === "person" ? `@${label} ` : `${label} `;
+}
+
 export function renderFormattedValue(value: string, mentions: CommittedMention[]): ReactNode[] {
   const validMentions = mentions
     .filter((mention) => value.slice(mention.start, mention.end) === mention.text)
@@ -71,16 +81,28 @@ export function renderPreviewValue(
   if (!match || match.index === undefined) return renderFormattedValue(value, mentions);
 
   const typedMention = value.slice(match.index, cursorPosition);
-  const candidateMention = `@${resultLabel(result)}`;
+  const candidateMention =
+    result.type === "person" ? `@${resultLabel(result)}` : resultLabel(result);
   const normalizedTyped = typedMention.toLocaleLowerCase();
   const normalizedCandidate = candidateMention.toLocaleLowerCase();
-  const completion = normalizedCandidate.startsWith(normalizedTyped)
-    ? candidateMention.slice(typedMention.length)
-    : ` ${resultLabel(result)}`;
+
+  let prefix = "";
+  let completion = "";
+
+  if (result.type === "person") {
+    prefix = typedMention;
+    completion = normalizedCandidate.startsWith(normalizedTyped)
+      ? candidateMention.slice(typedMention.length)
+      : ` ${resultLabel(result)}`;
+  } else {
+    // For pages, the typed '@' is replaced upon selection, so ghost text displays
+    // the page label directly following the '@'
+    completion = ` ${candidateMention}`;
+  }
 
   return [
     ...renderFormattedValue(value.slice(0, match.index), mentions),
-    typedMention,
+    prefix,
     <span className="composer__mention-preview" key="mention-preview">
       {completion}
     </span>,

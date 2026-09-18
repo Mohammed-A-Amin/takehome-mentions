@@ -5,9 +5,9 @@ import {
   findCommonSuffix,
   findEditStart,
   MENTION_RE,
+  mentionInsertionText,
   renderFormattedValue,
   renderPreviewValue,
-  resultLabel,
   type CommittedMention,
 } from "./mentionUtils";
 import { useCaretPosition } from "./useCaretPosition";
@@ -145,13 +145,12 @@ export function App() {
   }, [isMenuOpen, query]);
 
   function handleSelect(result: MentionResult) {
-    const label = resultLabel(result);
     const beforeCursor = value.slice(0, cursorPosition);
     const afterCursor = value.slice(cursorPosition);
     const mentionMatch = beforeCursor.match(MENTION_RE);
     if (!mentionMatch || mentionMatch.index === undefined) return;
     const mentionStart = mentionMatch.index;
-    const mentionText = `@${label} `;
+    const mentionText = mentionInsertionText(result);
     const nextBeforeCursor = beforeCursor.slice(0, mentionStart) + mentionText;
     const nextCursorPosition = nextBeforeCursor.length;
     setValue(nextBeforeCursor + afterCursor);
