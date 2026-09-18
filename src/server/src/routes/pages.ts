@@ -5,13 +5,13 @@ import type { Page, PageSearchResult } from "../types.js";
 
 const DEFAULT_LIMIT = 15;
 const MAX_LIMIT = 50;
-const CANDIDATE_LIMIT = 100;
+const CANDIDATE_LIMIT = 10_000;
 
 type ScoredPage = { page: Page; score: number; titleMatchPosition: number; tokenCoverage: number };
 
 /**
- * Search titles and body content, then rank candidates locally. Title matches
- * deliberately outweigh content-only matches so an exact page name remains
+ * Search titles and body content across all available pages, then rank candidates locally.
+ * Title matches deliberately outweigh content-only matches so an exact page name remains
  * easy to find among broad body-text results.
  */
 export function createPagesRouter(db: Database.Database): Router {
@@ -50,6 +50,10 @@ export function createPagesRouter(db: Database.Database): Router {
   return router;
 }
 
+/**
+ * Calculates the minimum score required for a page candidate to be returned,
+ * preventing noisy low-relevance results on short queries.
+ */
 function minimumPageScore(query: string): number {
   const length = normalize(query).length;
   if (length <= 1) return 500;
@@ -57,7 +61,10 @@ function minimumPageScore(query: string): number {
   return 100;
 }
 
-/** Rank typed page candidates and remove pages with no meaningful match. */
+/**
+ * Rank typed page candidates and remove pages with no meaningful match.
+ * For empty queries, orders pages by observable edit freshness.
+ */
 export function rankPages(pages: Page[], query: string): ScoredPage[] {
   const normalizedQuery = normalize(query);
   if (!normalizedQuery) {
@@ -78,6 +85,9 @@ export function rankPages(pages: Page[], query: string): ScoredPage[] {
     );
 }
 
+/**
+ * Computes a tiered relevance score and match metrics for an individual page candidate.
+ */
 function scorePage(page: Page, query: string): ScoredPage {
   const title = normalize(page.title);
   const content = normalize(page.content);
@@ -107,16 +117,19 @@ function scorePage(page: Page, query: string): ScoredPage {
   };
 }
 
+/** Converts a raw Page record to a typed PageSearchResult. */
 function toSearchResult(page: Page): PageSearchResult {
   return { ...page, type: "page" };
 }
 
+/** Counts how many query tokens match the prefix of any token in the candidate text. */
 function countMatchingTokens(queryTokens: string[], candidateTokens: string[]): number {
   return queryTokens.filter((queryToken) =>
     candidateTokens.some((candidateToken) => candidateToken.startsWith(queryToken)),
   ).length;
 }
 
+/** Deterministic comparator for stable ordering by title and page ID. */
 function comparePages(a: Page, b: Page): number {
   return a.title.localeCompare(b.title) || a.id.localeCompare(b.id);
 }
@@ -130,6 +143,7 @@ function compareRecentPages(a: Page, b: Page): number {
   );
 }
 
+/** Normalizes a string by lowercasing, stripping accents, and trimming whitespace. */
 function normalize(value: string): string {
   return value
     .normalize("NFKD")
@@ -138,22 +152,26 @@ function normalize(value: string): string {
     .trim();
 }
 
+/** Tokenizes input text into alphanumeric word tokens. */
 function tokenize(value: string): string[] {
   return normalize(value)
     .split(/[^a-z0-9]+/)
     .filter(Boolean);
 }
 
+/** Extracts a single string from a query parameter. */
 function firstString(value: unknown): string | undefined {
   if (typeof value === "string") return value;
   if (Array.isArray(value) && typeof value[0] === "string") return value[0];
   return undefined;
 }
 
+/** Escapes SQLite LIKE wildcards (% and _) and the backslash escape character. */
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, "\\$&");
 }
 
+/** Clamps client-requested limits to a valid positive range up to MAX_LIMIT. */
 function clampLimit(raw: string | undefined): number {
   const parsed = raw !== undefined ? Number.parseInt(raw, 10) : NaN;
   if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_LIMIT;
