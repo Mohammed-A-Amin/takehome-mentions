@@ -92,6 +92,41 @@ body {
   width: 100%;
 }
 
+.composer__formatted-value {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  min-height: 520px;
+  box-sizing: border-box;
+  padding: 0;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  font-size: 16px;
+  line-height: 1.5;
+  font-family: inherit;
+  font-weight: 400;
+  letter-spacing: normal;
+  color: inherit;
+  pointer-events: none;
+}
+
+.composer__formatted-value strong {
+  font-weight: 700;
+}
+
+.composer__mention-preview {
+  color: var(--text-secondary);
+}
+
+.composer__caret {
+  position: absolute;
+  width: 1px;
+  background: var(--text-primary);
+  pointer-events: none;
+  z-index: 2;
+}
+
 .composer__input {
   width: 100%;
   min-height: 520px;
@@ -103,8 +138,14 @@ body {
   resize: vertical;
   outline: none;
   font-family: inherit;
+  font-weight: 400;
+  letter-spacing: normal;
   color: inherit;
+  color: transparent;
+  caret-color: transparent;
   background: transparent;
+  position: relative;
+  z-index: 1;
 }
 
 .composer__input:focus {
@@ -112,7 +153,11 @@ body {
 }
 
 .composer__input::placeholder {
-  color: var(--text-tertiary);
+  color: transparent;
+}
+
+.composer__input::selection {
+  color: transparent;
 }
 
 .menu {
@@ -128,6 +173,18 @@ body {
   max-height: 320px;
   overflow-y: auto;
   z-index: 10;
+  animation: mention-menu-enter 140ms ease-out both;
+}
+
+@keyframes mention-menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .menu__section-label {
@@ -174,6 +231,41 @@ body {
 
 .menu__item {
   margin: 0;
+  animation: mention-option-enter 120ms ease-out both;
+}
+
+@keyframes mention-option-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.menu__item:nth-of-type(2) {
+  animation-delay: 12ms;
+}
+
+.menu__item:nth-of-type(3) {
+  animation-delay: 24ms;
+}
+
+.menu__item:nth-of-type(4) {
+  animation-delay: 36ms;
+}
+
+.menu__item:nth-of-type(5) {
+  animation-delay: 48ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu,
+  .menu__item {
+    animation: none;
+  }
 }
 
 .menu__item--active .menu__button,
@@ -236,4 +328,26 @@ body {
 .menu__meta {
   color: var(--text-tertiary);
   font-size: 12px;
+}
+
+.menu__button--more {
+  color: var(--text-secondary);
+}
+
+.menu__more {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.menu__more-ellipsis {
+  display: inline-flex;
+  width: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  letter-spacing: 0.08em;
 }
