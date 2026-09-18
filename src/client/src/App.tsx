@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { createPage, deletePage } from "./api";
-import { MentionMenu } from "./MentionMenu";
-import { buildMenuOptions, type OverflowSection } from "./mentionMenuModel";
+import { createPage, deletePage } from "./features/mentions/api";
+import { MentionMenu } from "./features/mentions/MentionMenu";
+import { buildMenuOptions, type OverflowSection } from "./features/mentions/mentionMenuModel";
 import {
   findCommonSuffix,
   findEditStart,
@@ -10,10 +10,10 @@ import {
   renderFormattedValue,
   renderPreviewValue,
   type CommittedMention,
-} from "./mentionUtils";
-import { useCaretPosition } from "./useCaretPosition";
-import { prefetchEmptyResults, useMentionSearch } from "./useMentionSearch";
-import type { MentionResult, PageResult } from "./types";
+} from "./features/mentions/mentionUtils";
+import { useCaretPosition } from "./features/mentions/useCaretPosition";
+import { prefetchEmptyResults, useMentionSearch } from "./features/mentions/useMentionSearch";
+import type { MentionResult, PageResult } from "./features/mentions/types";
 import "./App.css";
 
 export function App() {
