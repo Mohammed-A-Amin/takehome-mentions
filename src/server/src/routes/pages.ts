@@ -5,18 +5,17 @@ import type { Page, PageSearchResult } from "../types.js";
 
 const DEFAULT_LIMIT = 15;
 const MAX_LIMIT = 50;
-const CANDIDATE_LIMIT = 10_000;
 
 type ScoredPage = { page: Page; score: number; titleMatchPosition: number; tokenCoverage: number };
 
 /**
- * Search titles and body content across all available pages, then rank candidates locally.
- * Title matches deliberately outweigh content-only matches so an exact page name remains
- * easy to find among broad body-text results.
+ * Search titles and body content across all available pages without an arbitrary candidate limit,
+ * then rank all candidates locally. Title matches deliberately outweigh content-only matches so
+ * an exact page name remains easy to find among broad body-text results.
  */
 export function createPagesRouter(db: Database.Database): Router {
   const router = Router();
-  const search = db.prepare<[string, string, number]>(`
+  const search = db.prepare<[string, string]>(`
     SELECT
       id,
       title,
@@ -27,7 +26,6 @@ export function createPagesRouter(db: Database.Database): Router {
     FROM pages
     WHERE lower(title) LIKE '%' || lower(?) || '%' ESCAPE char(92)
        OR lower(content) LIKE '%' || lower(?) || '%' ESCAPE char(92)
-    LIMIT ?
   `);
 
   router.get("/", chaos("pages"), (req, res) => {
@@ -38,7 +36,7 @@ export function createPagesRouter(db: Database.Database): Router {
       return;
     }
     const escapedQuery = escapeLike(query);
-    const rows = search.all(escapedQuery, escapedQuery, CANDIDATE_LIMIT) as Page[];
+    const rows = search.all(escapedQuery, escapedQuery) as Page[];
     const ranked = rankPages(rows, query);
     const filtered = query.trim()
       ? ranked.filter(({ score }) => score >= minimumPageScore(query))
