@@ -1,6 +1,7 @@
 import { Router } from "express";
 import type { Person } from "../types.js";
 import { CURRENT_USER, recommendPeople, rankPeople } from "../peopleSearch.js";
+import { QueryCache } from "../queryCache.js";
 
 const PEOPLE_ENDPOINT = "https://takehome.notion.dev/people";
 const DEFAULT_LIMIT = 20;
@@ -13,8 +14,6 @@ const MAX_CACHE_ENTRIES = 200;
 
 type FetchLike = typeof fetch;
 type PeopleResponse = { results: Array<ReturnType<typeof rankPeople>[number]> };
-type CacheEntry = { response: PeopleResponse; fetchedAt: number };
-
 /**
  * Build the local People API.
  *
@@ -24,8 +23,7 @@ type CacheEntry = { response: PeopleResponse; fetchedAt: number };
  */
 export function createPeopleRouter(fetchPeople: FetchLike = fetch): Router {
   const router = Router();
-  const cache = new Map<string, CacheEntry>();
-  const inFlight = new Map<string, Promise<PeopleResponse>>();
+  const cache = new QueryCache<PeopleResponse>(MAX_CACHE_ENTRIES);
 
   router.get("/", async (req, res) => {
     // Cache entries are keyed by normalized query, so whitespace/case changes
@@ -33,29 +31,24 @@ export function createPeopleRouter(fetchPeople: FetchLike = fetch): Router {
     const query = firstString(req.query.q) ?? "";
     const limit = clampLimit(firstString(req.query.limit));
     const cacheKey = normalizeQuery(query);
-    const cached = cache.get(cacheKey);
     const ttl = query.trim() ? TYPED_TTL_MS : EMPTY_TTL_MS;
+    const fresh = cache.getFresh(cacheKey, ttl);
 
-    if (cached && Date.now() - cached.fetchedAt <= ttl) {
-      res.json({ results: cached.response.results.slice(0, limit) });
+    if (fresh) {
+      res.json({ results: fresh.results.slice(0, limit) });
       return;
     }
 
-    let request = inFlight.get(cacheKey);
-    if (!request) {
-      request = fetchAndRank(query, fetchPeople);
-      inFlight.set(cacheKey, request);
-      void request.finally(() => inFlight.delete(cacheKey)).catch(() => undefined);
-    }
+    const request = cache.getOrLoad(cacheKey, () => fetchAndRank(query, fetchPeople));
 
     try {
       const response = await request;
-      cacheResponse(cache, cacheKey, response);
       res.json({ results: response.results.slice(0, limit) });
     } catch (error) {
-      if (cached && Date.now() - cached.fetchedAt <= STALE_MAX_AGE_MS) {
+      const stale = cache.getStale(cacheKey, STALE_MAX_AGE_MS);
+      if (stale) {
         res.setHeader("X-People-Results-Stale", "true");
-        res.json({ results: cached.response.results.slice(0, limit) });
+        res.json({ results: stale.results.slice(0, limit) });
         return;
       }
 
@@ -119,17 +112,6 @@ async function fetchDirectory(
   if (!response.ok) throw new Error(`People directory returned ${response.status}`);
   const body = (await response.json()) as { results?: unknown };
   return Array.isArray(body.results) ? body.results.filter(isPerson) : [];
-}
-
-/** Insert a response into the LRU cache and evict the oldest entry if needed. */
-function cacheResponse(
-  cache: Map<string, CacheEntry>,
-  key: string,
-  response: PeopleResponse,
-): void {
-  cache.delete(key);
-  cache.set(key, { response, fetchedAt: Date.now() });
-  while (cache.size > MAX_CACHE_ENTRIES) cache.delete(cache.keys().next().value as string);
 }
 
 /** Merge the team/title candidate pools without duplicating people by ID. */
