@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import type { MenuOption, OverflowSection } from "./mentionMenuModel";
-import type { MentionResult, PageResult, PersonResult } from "./types";
+import type { MenuOption, OverflowSection } from "../model/mentionMenuModel";
+import type { MentionResult, PageResult, PersonResult } from "../types";
 
 type MentionMenuProps = {
   options: MenuOption[];

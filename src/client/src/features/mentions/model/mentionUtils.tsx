@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { MentionResult } from "./types";
+import type { MentionResult } from "../types";
 
 export const MENTION_RE = /@([^@]*)$/;
 

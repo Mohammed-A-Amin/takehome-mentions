@@ -1,7 +1,7 @@
 import { Router } from "express";
-import type { Person } from "../types.js";
-import { CURRENT_USER, recommendPeople, rankPeople } from "../peopleSearch.js";
-import { QueryCache } from "../queryCache.js";
+import { QueryCache } from "../../shared/cache/queryCache.js";
+import type { Person } from "../../shared/types.js";
+import { CURRENT_USER, recommendPeople, rankPeople } from "./search.js";
 
 const PEOPLE_ENDPOINT = "https://takehome.notion.dev/people";
 const DEFAULT_LIMIT = 20;

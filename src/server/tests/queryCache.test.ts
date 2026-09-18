@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { QueryCache } from "../src/queryCache.js";
+import { QueryCache } from "../src/shared/cache/queryCache.js";
 
 describe("QueryCache", () => {
   it("deduplicates concurrent loads and caches a successful result", async () => {

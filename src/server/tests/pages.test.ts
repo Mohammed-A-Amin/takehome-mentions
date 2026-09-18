@@ -19,12 +19,12 @@ beforeAll(async () => {
   tmpDir = mkdtempSync(path.join(tmpdir(), "takehome-"));
   process.env.NOTION_TH_DB_PATH = path.join(tmpDir, "test.db");
 
-  const { openDb } = await import("../src/db.ts");
-  const { seedDatabase } = await import("../src/seed.ts");
+  const { openDb } = await import("../src/shared/db/db.ts");
+  const { seedDatabase } = await import("../src/shared/db/seed.ts");
   db = openDb();
   seedDatabase(db);
 
-  const { createApp } = await import("../src/app.ts");
+  const { createApp } = await import("../src/app/app.ts");
   app = createApp(db);
 });
 
@@ -123,8 +123,8 @@ describe("GET /api/pages", () => {
 
 describe("seedDatabase", () => {
   it("produces identical pages for the same pinned clock", async () => {
-    const { openDb } = await import("../src/db.ts");
-    const { seedDatabase } = await import("../src/seed.ts");
+    const { openDb } = await import("../src/shared/db/db.ts");
+    const { seedDatabase } = await import("../src/shared/db/seed.ts");
     const pinned = Date.parse("2026-01-15T00:00:00.000Z");
 
     const read = (handle: Database.Database) =>

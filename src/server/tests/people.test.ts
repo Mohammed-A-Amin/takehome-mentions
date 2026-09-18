@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import request from "supertest";
-import { createApp } from "../src/app.js";
-import { CURRENT_USER, recommendPeople, rankPeople } from "../src/peopleSearch.js";
-import type { Person } from "../src/types.js";
+import { createApp } from "../src/app/app.js";
+import { CURRENT_USER, recommendPeople, rankPeople } from "../src/features/people/search.js";
+import type { Person } from "../src/shared/types.js";
 
 const alex: Person = {
   id: "alex",

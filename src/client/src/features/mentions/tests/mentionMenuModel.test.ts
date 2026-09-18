@@ -4,8 +4,8 @@ import {
   MAX_COMPACTED,
   sectionView,
   VISIBLE_PER_SECTION,
-} from "./mentionMenuModel";
-import type { MentionResult } from "./types";
+} from "../model/mentionMenuModel";
+import type { MentionResult } from "../types";
 
 const person = (id: string): MentionResult => ({
   type: "person",

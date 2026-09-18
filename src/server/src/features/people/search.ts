@@ -1,4 +1,4 @@
-import type { Person, PersonSearchResult } from "./types.js";
+import type { Person, PersonSearchResult } from "../../shared/types.js";
 
 /** Local identity used for the empty-query recommendation experience. */
 export type CurrentUser = Person;

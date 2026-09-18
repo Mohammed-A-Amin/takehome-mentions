@@ -1,4 +1,4 @@
-import type { MentionResult, PageResult, PersonResult } from "./types";
+import type { MentionResult, PageResult, PersonResult } from "../types";
 
 export const VISIBLE_PER_SECTION = 5;
 export const MAX_COMPACTED = 15;
