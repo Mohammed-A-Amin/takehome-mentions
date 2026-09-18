@@ -199,11 +199,13 @@ export function App() {
     const left = Math.max(0, markerRect.left - composerRect.left);
     const lineTop = markerRect.top - composerRect.top - textarea.scrollTop;
     const lineBottom = markerRect.bottom - composerRect.top - textarea.scrollTop;
-    const enoughSpaceBelow = window.innerHeight - markerRect.bottom >= MENU_MAX_HEIGHT_PX + MENU_GAP_PX;
+    const enoughSpaceBelow =
+      window.innerHeight - markerRect.bottom >= MENU_MAX_HEIGHT_PX + MENU_GAP_PX;
     const enoughSpaceAbove = markerRect.top >= MENU_MAX_HEIGHT_PX + MENU_GAP_PX;
-    const menuTop = enoughSpaceBelow || !enoughSpaceAbove
-      ? lineBottom + MENU_GAP_PX
-      : lineTop - MENU_MAX_HEIGHT_PX - MENU_GAP_PX;
+    const menuTop =
+      enoughSpaceBelow || !enoughSpaceAbove
+        ? lineBottom + MENU_GAP_PX
+        : lineTop - MENU_MAX_HEIGHT_PX - MENU_GAP_PX;
     if (isMenuOpen) setMenuPosition({ left, top: menuTop });
     if (isEditorFocused && cursorPosition === selectionEnd) {
       setCaretPosition({ left, top: lineTop, height: markerRect.height || 24 });
