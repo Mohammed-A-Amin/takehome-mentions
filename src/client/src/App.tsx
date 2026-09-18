@@ -157,7 +157,12 @@ export function App() {
     setCursorPosition(nextCursorPosition);
     setSelectionEnd(nextCursorPosition);
     setPreviewResult(null);
-    const insertedMention = { start: mentionStart, end: nextCursorPosition, text: mentionText };
+    const insertedMention: CommittedMention = {
+      start: mentionStart,
+      end: nextCursorPosition,
+      text: mentionText,
+      type: result.type,
+    };
     committedMentions.current = [
       ...committedMentions.current.filter((mention) => mention.end <= mentionStart),
       insertedMention,

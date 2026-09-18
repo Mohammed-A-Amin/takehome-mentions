@@ -7,6 +7,7 @@ export type CommittedMention = {
   start: number;
   end: number;
   text: string;
+  type?: "person" | "page" | "date";
 };
 
 /**
@@ -61,7 +62,7 @@ export function mentionInsertionText(result: MentionResult): string {
 }
 
 /**
- * Renders the formatted text backdrop with committed mentions highlighted in bold strong tags.
+ * Renders the formatted text backdrop with committed mentions highlighted in styled badge spans.
  */
 export function renderFormattedValue(value: string, mentions: CommittedMention[]): ReactNode[] {
   const validMentions = mentions
@@ -73,10 +74,14 @@ export function renderFormattedValue(value: string, mentions: CommittedMention[]
   for (const mention of validMentions) {
     if (mention.start < cursor) continue;
     parts.push(value.slice(cursor, mention.start));
+    const badgeType = mention.type ?? (mention.text.startsWith("@") ? "person" : "page");
     parts.push(
-      <strong key={`${mention.start}-${mention.end}`}>
+      <span
+        key={`${mention.start}-${mention.end}`}
+        className={`mention-badge mention-badge--${badgeType}`}
+      >
         {value.slice(mention.start, mention.end - 1)}
-      </strong>,
+      </span>,
     );
     parts.push(" ");
     cursor = mention.end;
@@ -148,9 +153,11 @@ export function appendFormattedText(
   for (const mention of validMentions) {
     if (mention.start < cursor) continue;
     container.appendChild(document.createTextNode(value.slice(cursor, mention.start)));
-    const strong = document.createElement("strong");
-    strong.textContent = value.slice(mention.start, mention.end - 1);
-    container.appendChild(strong);
+    const badgeType = mention.type ?? (mention.text.startsWith("@") ? "person" : "page");
+    const span = document.createElement("span");
+    span.className = `mention-badge mention-badge--${badgeType}`;
+    span.textContent = value.slice(mention.start, mention.end - 1);
+    container.appendChild(span);
     container.appendChild(document.createTextNode(" "));
     cursor = mention.end;
   }
