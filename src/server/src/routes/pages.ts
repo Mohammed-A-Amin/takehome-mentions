@@ -10,8 +10,7 @@ type ScoredPage = { page: Page; score: number; titleMatchPosition: number; token
 
 /**
  * Search titles and body content across all available pages without an arbitrary candidate limit,
- * then rank all candidates locally. Title matches deliberately outweigh content-only matches so
- * an exact page name remains easy to find among broad body-text results.
+ * rank candidates locally, and support creating new pages.
  */
 export function createPagesRouter(db: Database.Database): Router {
   const router = Router();
@@ -26,6 +25,11 @@ export function createPagesRouter(db: Database.Database): Router {
     FROM pages
     WHERE lower(title) LIKE '%' || lower(?) || '%' ESCAPE char(92)
        OR lower(content) LIKE '%' || lower(?) || '%' ESCAPE char(92)
+  `);
+
+  const insertPage = db.prepare<[string, string, string, string, string, string]>(`
+    INSERT INTO pages (id, title, icon, content, created_time, last_edited_time)
+    VALUES (?, ?, ?, ?, ?, ?)
   `);
 
   router.get("/", chaos("pages"), (req, res) => {
@@ -43,6 +47,37 @@ export function createPagesRouter(db: Database.Database): Router {
       : ranked;
     const results = filtered.slice(0, limit).map(({ page }) => toSearchResult(page));
     res.json({ results });
+  });
+
+  router.post("/", (req, res) => {
+    const rawTitle = req.body?.title;
+    if (typeof rawTitle !== "string" || !rawTitle.trim()) {
+      res.status(400).json({ error: "Title is required and must be a non-empty string" });
+      return;
+    }
+
+    const title = rawTitle.trim();
+    const icon =
+      typeof req.body?.icon === "string" && req.body.icon.trim() ? req.body.icon.trim() : "📄";
+    const content = typeof req.body?.content === "string" ? req.body.content : "";
+    const id = `page_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const now = new Date().toISOString();
+
+    try {
+      insertPage.run(id, title, icon, content, now, now);
+      const newPage: PageSearchResult = {
+        id,
+        title,
+        icon,
+        content,
+        createdTime: now,
+        lastEditedTime: now,
+        type: "page",
+      };
+      res.status(201).json(newPage);
+    } catch {
+      res.status(500).json({ error: "Failed to create page in database" });
+    }
   });
 
   return router;

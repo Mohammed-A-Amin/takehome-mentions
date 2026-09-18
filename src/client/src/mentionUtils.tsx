@@ -9,6 +9,10 @@ export type CommittedMention = {
   text: string;
 };
 
+/**
+ * Finds the first index where the previous and next string values diverge.
+ * Used to detect the starting point of an edit or deletion in the composer.
+ */
 export function findEditStart(previousValue: string, nextValue: string): number {
   let index = 0;
   while (
@@ -21,6 +25,10 @@ export function findEditStart(previousValue: string, nextValue: string): number 
   return index;
 }
 
+/**
+ * Finds the length of the matching suffix between previous and next string values.
+ * Used alongside findEditStart to calculate the range of deleted or replaced characters.
+ */
 export function findCommonSuffix(previousValue: string, nextValue: string): number {
   let count = 0;
   while (
@@ -33,6 +41,9 @@ export function findCommonSuffix(previousValue: string, nextValue: string): numb
   return count;
 }
 
+/**
+ * Extracts the user-visible display label for a mention candidate based on its type.
+ */
 export function resultLabel(result: MentionResult): string {
   if (result.type === "page") return `${result.icon} ${result.title}`;
   if (result.type === "person") return result.name;
@@ -40,15 +51,18 @@ export function resultLabel(result: MentionResult): string {
 }
 
 /**
- * Returns the text to insert when a mention candidate is selected.
- * People include the leading '@' (e.g. '@Taylor Chen '), whereas Pages
- * and other entities do not include the '@' (e.g. '📄 Project Roadmap ').
+ * Returns the exact text to insert into the document when a mention is chosen.
+ * Person mentions preserve the leading '@' symbol (e.g. '@Taylor Chen '),
+ * whereas page mentions omit the '@' prefix (e.g. '📄 Project Roadmap ').
  */
 export function mentionInsertionText(result: MentionResult): string {
   const label = resultLabel(result);
   return result.type === "person" ? `@${label} ` : `${label} `;
 }
 
+/**
+ * Renders the formatted text backdrop with committed mentions highlighted in bold strong tags.
+ */
 export function renderFormattedValue(value: string, mentions: CommittedMention[]): ReactNode[] {
   const validMentions = mentions
     .filter((mention) => value.slice(mention.start, mention.end) === mention.text)
@@ -71,6 +85,10 @@ export function renderFormattedValue(value: string, mentions: CommittedMention[]
   return parts;
 }
 
+/**
+ * Renders the formatted text backdrop including an inline ghost completion preview
+ * for the currently active/selected mention candidate.
+ */
 export function renderPreviewValue(
   value: string,
   cursorPosition: number,
@@ -110,6 +128,10 @@ export function renderPreviewValue(
   ];
 }
 
+/**
+ * Appends text with formatted strong tags into a DOM container.
+ * Used inside hidden DOM mirror elements to accurately calculate caret pixel coordinates.
+ */
 export function appendFormattedText(
   container: HTMLElement,
   value: string,

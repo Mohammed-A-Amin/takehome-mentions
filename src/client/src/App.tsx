@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { searchPages, searchPeople } from "./api";
+import { createPage, searchPages, searchPeople } from "./api";
 import { buildMenuOptions, MentionMenu, type OverflowSection } from "./MentionMenu";
 import {
   findCommonSuffix,
@@ -11,7 +11,7 @@ import {
   type CommittedMention,
 } from "./mentionUtils";
 import { useCaretPosition } from "./useCaretPosition";
-import type { MentionResult } from "./types";
+import type { MentionResult, PageResult } from "./types";
 import "./App.css";
 
 const QUERY_DEBOUNCE_MS = 125;
@@ -20,8 +20,8 @@ type EmptyResults = { people: MentionResult[]; pages: MentionResult[] };
 let emptyResultsPromise: Promise<EmptyResults> | undefined;
 
 /** Warm the blank-document menu so the first empty @ can render immediately. */
-function prefetchEmptyResults(): Promise<EmptyResults> {
-  if (!emptyResultsPromise) {
+function prefetchEmptyResults(forceRefresh = false): Promise<EmptyResults> {
+  if (!emptyResultsPromise || forceRefresh) {
     emptyResultsPromise = Promise.allSettled([searchPeople(""), searchPages("")]).then(
       ([people, pages]) => ({
         people: people.status === "fulfilled" ? people.value : [],
@@ -69,7 +69,7 @@ export function App() {
   const rawQuery = match ? match[1] : null;
   const query = rawQuery === null ? null : rawQuery.trim();
   const isMenuOpen = rawQuery !== null && !/\s$/.test(rawQuery);
-  const menuOptions = buildMenuOptions(results, expandedPeople, expandedPages);
+  const menuOptions = buildMenuOptions(results, expandedPeople, expandedPages, query ?? undefined);
 
   const { caretPosition, menuPosition } = useCaretPosition({
     textareaRef,
@@ -168,6 +168,26 @@ export function App() {
     });
   }
 
+  async function handleCreatePage(title: string) {
+    try {
+      const newPage = await createPage(title);
+      void prefetchEmptyResults(true);
+      handleSelect(newPage);
+    } catch {
+      // Fallback: insert page tag locally if network/backend failed
+      const fallbackPage: PageResult = {
+        id: `page_${Date.now()}`,
+        title,
+        icon: "📄",
+        content: "",
+        createdTime: new Date().toISOString(),
+        lastEditedTime: new Date().toISOString(),
+        type: "page",
+      };
+      handleSelect(fallbackPage);
+    }
+  }
+
   function handleExpand(section: OverflowSection) {
     setPreviewResult(null);
     if (section === "people") setExpandedPeople(true);
@@ -218,6 +238,7 @@ export function App() {
       event.preventDefault();
       const option = menuOptions[activeIndex];
       if (option.kind === "more") handleExpand(option.section);
+      else if (option.kind === "create") void handleCreatePage(option.title);
       else handleSelect(option.result);
     }
   }
@@ -313,9 +334,11 @@ export function App() {
                 activeIndex={activeIndex}
                 expandedPeople={expandedPeople}
                 expandedPages={expandedPages}
+                query={query ?? undefined}
                 onActiveIndexChange={handleActiveIndexChange}
                 onSelect={handleSelect}
                 onExpand={handleExpand}
+                onCreatePage={handleCreatePage}
                 position={menuPosition}
               />
             )}

@@ -152,3 +152,38 @@ describe("seedDatabase", () => {
     }
   });
 });
+
+describe("POST /api/pages", () => {
+  it("creates a new page and returns 201 with full PageSearchResult", async () => {
+    const res = await request(app).post("/api/pages").send({
+      title: "Unique Engineering RFC",
+      icon: "📘",
+      content: "Detailed RFC content for engineering discussion.",
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.title).toBe("Unique Engineering RFC");
+    expect(res.body.icon).toBe("📘");
+    expect(res.body.content).toBe("Detailed RFC content for engineering discussion.");
+    expect(res.body.type).toBe("page");
+    expect(typeof res.body.id).toBe("string");
+    expect(typeof res.body.createdTime).toBe("string");
+    expect(typeof res.body.lastEditedTime).toBe("string");
+
+    // Verify it is immediately searchable
+    const searchRes = await request(app).get("/api/pages").query({ q: "Engineering RFC" });
+    expect(searchRes.status).toBe(200);
+    expect(searchRes.body.results.some((p: any) => p.title === "Unique Engineering RFC")).toBe(
+      true,
+    );
+  });
+
+  it("rejects creation with 400 when title is missing or empty", async () => {
+    const res1 = await request(app).post("/api/pages").send({ title: "   " });
+    expect(res1.status).toBe(400);
+    expect(res1.body.error).toBeDefined();
+
+    const res2 = await request(app).post("/api/pages").send({});
+    expect(res2.status).toBe(400);
+  });
+});

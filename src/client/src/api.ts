@@ -31,3 +31,17 @@ export async function searchPeople(query: string, signal?: AbortSignal): Promise
   const data = (await res.json()) as { results?: PersonResult[] };
   return Array.isArray(data.results) ? data.results : [];
 }
+
+/** Create a new page and persist it in the SQLite database. */
+export async function createPage(title: string, icon: string = "📄"): Promise<PageResult> {
+  const res = await fetch(`${API_BASE}/pages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, icon }),
+  });
+  if (!res.ok) {
+    const errorBody = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(errorBody.error ?? `Failed to create page: ${res.status}`);
+  }
+  return (await res.json()) as PageResult;
+}

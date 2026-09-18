@@ -18,6 +18,11 @@ type UseCaretPositionOptions = {
   committedMentions: CommittedMention[];
 };
 
+/**
+ * Custom React hook that measures the caret's pixel coordinates within the textarea
+ * using a synchronized DOM mirror. Adaptively positions the mention menu either below
+ * or above the caret depending on available viewport space.
+ */
 export function useCaretPosition({
   textareaRef,
   composerRef,

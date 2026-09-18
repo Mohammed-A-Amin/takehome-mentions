@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { MentionResult, PersonResult } from "./types";
+import type { MentionResult, PageResult, PersonResult } from "./types";
 
 export const VISIBLE_PER_SECTION = 5;
 export const MAX_COMPACTED = 15;
@@ -9,9 +9,11 @@ type MentionMenuProps = {
   activeIndex: number;
   expandedPeople: boolean;
   expandedPages: boolean;
+  query?: string;
   onActiveIndexChange: (index: number) => void;
   onSelect: (result: MentionResult) => void;
   onExpand: (section: OverflowSection) => void;
+  onCreatePage?: (title: string) => void;
   position: { left: number; top: number };
 };
 
@@ -19,7 +21,8 @@ export type OverflowSection = "people" | "pages";
 
 export type MenuOption =
   | { kind: "result"; result: MentionResult }
-  | { kind: "more"; section: OverflowSection; moreCount: number };
+  | { kind: "more"; section: OverflowSection; moreCount: number }
+  | { kind: "create"; title: string };
 
 /** Split a section into the rows shown now and the compacted leftover count. */
 export function sectionView<T>(items: T[], expanded: boolean): { visible: T[]; moreCount: number } {
@@ -30,14 +33,15 @@ export function sectionView<T>(items: T[], expanded: boolean): { visible: T[]; m
   return { visible: items.slice(0, VISIBLE_PER_SECTION), moreCount: hidden };
 }
 
-/** Flatten people, optional people overflow, pages, optional pages overflow, then dates. */
+/** Flatten people, optional people overflow, pages, optional pages overflow, create option, then dates. */
 export function buildMenuOptions(
   results: MentionResult[],
   expandedPeople: boolean,
   expandedPages: boolean,
+  query?: string,
 ): MenuOption[] {
   const people = results.filter((result): result is PersonResult => result.type === "person");
-  const pages = results.filter((result) => result.type === "page");
+  const pages = results.filter((result): result is PageResult => result.type === "page");
   const dates = results.filter((result) => result.type === "date");
   const peopleView = sectionView(people, expandedPeople);
   const pagesView = sectionView(pages, expandedPages);
@@ -51,6 +55,16 @@ export function buildMenuOptions(
   if (pagesView.moreCount > 0) {
     options.push({ kind: "more", section: "pages", moreCount: pagesView.moreCount });
   }
+
+  const trimmedQuery = query?.trim();
+  const hasExactPageMatch = trimmedQuery
+    ? pages.some((p) => p.title.toLowerCase() === trimmedQuery.toLowerCase())
+    : false;
+
+  if (trimmedQuery && !hasExactPageMatch) {
+    options.push({ kind: "create", title: trimmedQuery });
+  }
+
   for (const result of dates) options.push({ kind: "result", result });
   return options;
 }
@@ -61,12 +75,16 @@ export function MentionMenu({
   activeIndex,
   expandedPeople,
   expandedPages,
+  query,
   onActiveIndexChange,
   onSelect,
   onExpand,
+  onCreatePage,
   position,
 }: MentionMenuProps) {
-  if (results.length === 0) {
+  const options = buildMenuOptions(results, expandedPeople, expandedPages, query);
+
+  if (options.length === 0) {
     return (
       <div className="menu menu--empty" style={{ left: position.left, top: position.top }}>
         No results
@@ -76,7 +94,6 @@ export function MentionMenu({
 
   const people = results.filter((result): result is PersonResult => result.type === "person");
   const pages = results.filter((result) => result.type === "page");
-  const options = buildMenuOptions(results, expandedPeople, expandedPages);
   const menuRef = useRef<HTMLDivElement>(null);
   let nextIndex = 0;
 
@@ -117,6 +134,30 @@ export function MentionMenu({
       );
     }
 
+    if (option.kind === "create") {
+      return (
+        <div
+          key={`create-${option.title}`}
+          id={`mention-option-${index}`}
+          className={`menu__item ${index === activeIndex ? "menu__item--active" : ""}`}
+          role="option"
+          aria-selected={index === activeIndex}
+          onMouseEnter={() => onActiveIndexChange(index)}
+        >
+          <button
+            type="button"
+            className="menu__button"
+            onClick={() => onCreatePage?.(option.title)}
+          >
+            <span className="menu__content">
+              <span className="menu__icon">➕</span>
+              <span>New page &ldquo;{option.title}&rdquo;</span>
+            </span>
+          </button>
+        </div>
+      );
+    }
+
     const result = option.result;
     return (
       <div
@@ -142,7 +183,8 @@ export function MentionMenu({
   const pageOptions = options.filter(
     (option) =>
       (option.kind === "result" && option.result.type === "page") ||
-      (option.kind === "more" && option.section === "pages"),
+      (option.kind === "more" && option.section === "pages") ||
+      option.kind === "create",
   );
   const dateOptions = options.filter(
     (option) => option.kind === "result" && option.result.type === "date",
@@ -159,7 +201,7 @@ export function MentionMenu({
     >
       {people.length > 0 && <div className="menu__section-label">People</div>}
       {peopleOptions.map(renderOption)}
-      {pages.length > 0 && (
+      {(pages.length > 0 || pageOptions.some((o) => o.kind === "create")) && (
         <>
           {people.length > 0 && <div className="menu__divider" />}
           <div className="menu__section-label">Link to page</div>

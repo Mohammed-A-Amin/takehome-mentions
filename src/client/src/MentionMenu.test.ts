@@ -67,3 +67,10 @@ describe("mention menu sections", () => {
     expect(peopleExpanded).toHaveLength(6 + 5 + 1);
   });
 });
+
+it("appends a create page option when a query has no exact match", () => {
+  const results = [page("existing")];
+  const options = buildMenuOptions(results, false, false, "New Roadmap");
+  const createOption = options.find((o) => o.kind === "create");
+  expect(createOption).toEqual({ kind: "create", title: "New Roadmap" });
+});
