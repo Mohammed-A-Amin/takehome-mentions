@@ -30,7 +30,10 @@ describe("mention menu sections", () => {
   });
 
   it("keeps the overflow count capped at fifteen", () => {
-    const items = Array.from({ length: VISIBLE_PER_SECTION + MAX_COMPACTED + 3 }, (_, index) => index);
+    const items = Array.from(
+      { length: VISIBLE_PER_SECTION + MAX_COMPACTED + 3 },
+      (_, index) => index,
+    );
 
     expect(sectionView(items, false)).toEqual({
       visible: items.slice(0, VISIBLE_PER_SECTION),

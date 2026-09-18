@@ -81,7 +81,9 @@ export function MentionMenu({
   let nextIndex = 0;
 
   useEffect(() => {
-    const activeOption = menuRef.current?.querySelector<HTMLElement>(`#mention-option-${activeIndex}`);
+    const activeOption = menuRef.current?.querySelector<HTMLElement>(
+      `#mention-option-${activeIndex}`,
+    );
     activeOption?.scrollIntoView({ block: "nearest" });
   }, [activeIndex, options.length]);
 
@@ -97,7 +99,11 @@ export function MentionMenu({
           aria-selected={index === activeIndex}
           onMouseEnter={() => onActiveIndexChange(index)}
         >
-          <button type="button" className="menu__button menu__button--more" onClick={() => onExpand(option.section)}>
+          <button
+            type="button"
+            className="menu__button menu__button--more"
+            onClick={() => onExpand(option.section)}
+          >
             <span className="menu__more">
               <span className="menu__more-ellipsis" aria-hidden="true">
                 …
@@ -138,7 +144,9 @@ export function MentionMenu({
       (option.kind === "result" && option.result.type === "page") ||
       (option.kind === "more" && option.section === "pages"),
   );
-  const dateOptions = options.filter((option) => option.kind === "result" && option.result.type === "date");
+  const dateOptions = options.filter(
+    (option) => option.kind === "result" && option.result.type === "date",
+  );
 
   return (
     <div

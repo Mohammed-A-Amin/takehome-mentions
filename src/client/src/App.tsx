@@ -15,7 +15,11 @@ let emptyResultsPromise: Promise<EmptyResults> | undefined;
 
 function findEditStart(previousValue: string, nextValue: string): number {
   let index = 0;
-  while (index < previousValue.length && index < nextValue.length && previousValue[index] === nextValue[index]) {
+  while (
+    index < previousValue.length &&
+    index < nextValue.length &&
+    previousValue[index] === nextValue[index]
+  ) {
     index += 1;
   }
   return index;
@@ -43,7 +47,11 @@ function renderFormattedValue(value: string, mentions: CommittedMention[]): Reac
   for (const mention of validMentions) {
     if (mention.start < cursor) continue;
     parts.push(value.slice(cursor, mention.start));
-    parts.push(<strong key={`${mention.start}-${mention.end}`}>{value.slice(mention.start, mention.end - 1)}</strong>);
+    parts.push(
+      <strong key={`${mention.start}-${mention.end}`}>
+        {value.slice(mention.start, mention.end - 1)}
+      </strong>,
+    );
     parts.push(" ");
     cursor = mention.end;
   }
@@ -77,7 +85,10 @@ function renderPreviewValue(
 
 function appendFormattedText(container: HTMLElement, value: string, mentions: CommittedMention[]) {
   const validMentions = mentions
-    .filter((mention) => mention.end <= value.length && value.slice(mention.start, mention.end) === mention.text)
+    .filter(
+      (mention) =>
+        mention.end <= value.length && value.slice(mention.start, mention.end) === mention.text,
+    )
     .sort((a, b) => a.start - b.start);
   let cursor = 0;
 
@@ -129,7 +140,9 @@ export function App() {
       cursorPosition <= mention.end &&
       value.slice(mention.start, mention.end) === mention.text,
   );
-  const candidateMatch = activeCommittedMention ? null : value.slice(0, cursorPosition).match(MENTION_RE);
+  const candidateMatch = activeCommittedMention
+    ? null
+    : value.slice(0, cursorPosition).match(MENTION_RE);
   const matchingCommittedMention = candidateMatch
     ? committedMentions.current.find(
         (mention) =>
@@ -257,8 +270,7 @@ export function App() {
     if (!mentionMatch || mentionMatch.index === undefined) return;
     const mentionStart = mentionMatch.index;
     const mentionText = `@${label} `;
-    const nextBeforeCursor =
-      beforeCursor.slice(0, mentionStart) + mentionText;
+    const nextBeforeCursor = beforeCursor.slice(0, mentionStart) + mentionText;
     const nextCursorPosition = nextBeforeCursor.length;
     setValue(nextBeforeCursor + afterCursor);
     setCursorPosition(nextCursorPosition);
@@ -282,11 +294,15 @@ export function App() {
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Backspace" && event.currentTarget.selectionStart === event.currentTarget.selectionEnd) {
+    if (
+      event.key === "Backspace" &&
+      event.currentTarget.selectionStart === event.currentTarget.selectionEnd
+    ) {
       const cursor = event.currentTarget.selectionStart;
       const mention = committedMentions.current.find(
         (candidate) =>
-          candidate.end === cursor && value.slice(candidate.start, candidate.end) === candidate.text,
+          candidate.end === cursor &&
+          value.slice(candidate.start, candidate.end) === candidate.text,
       );
       if (mention) {
         event.preventDefault();
@@ -298,7 +314,10 @@ export function App() {
           .filter((candidate) => candidate !== mention)
           .map((candidate) => ({
             ...candidate,
-            start: candidate.start > mention.end ? candidate.start - mention.text.length : candidate.start,
+            start:
+              candidate.start > mention.end
+                ? candidate.start - mention.text.length
+                : candidate.start,
             end: candidate.end > mention.end ? candidate.end - mention.text.length : candidate.end,
           }));
         requestAnimationFrame(() => {
@@ -363,14 +382,23 @@ export function App() {
           <div className="composer" ref={composerRef}>
             <div className="composer__formatted-value" aria-hidden="true">
               {previewResult
-                ? renderPreviewValue(value, cursorPosition, previewResult, committedMentions.current)
+                ? renderPreviewValue(
+                    value,
+                    cursorPosition,
+                    previewResult,
+                    committedMentions.current,
+                  )
                 : renderFormattedValue(value, committedMentions.current)}
             </div>
             {caretPosition && (
               <span
                 className="composer__caret"
                 aria-hidden="true"
-                style={{ left: caretPosition.left, top: caretPosition.top, height: caretPosition.height }}
+                style={{
+                  left: caretPosition.left,
+                  top: caretPosition.top,
+                  height: caretPosition.height,
+                }}
               />
             )}
             <textarea
