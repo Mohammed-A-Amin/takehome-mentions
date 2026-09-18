@@ -76,10 +76,21 @@ function renderPreviewValue(
   const match = value.slice(0, cursorPosition).match(MENTION_RE);
   if (!match || match.index === undefined) return renderFormattedValue(value, mentions);
 
+  const typedMention = value.slice(match.index, cursorPosition);
+  const candidateMention = `@${resultLabel(result)}`;
+  const normalizedTyped = typedMention.toLocaleLowerCase();
+  const normalizedCandidate = candidateMention.toLocaleLowerCase();
+  const completion = normalizedCandidate.startsWith(normalizedTyped)
+    ? candidateMention.slice(typedMention.length)
+    : result.type === "page"
+      ? ` ${resultLabel(result)}`
+      : ` ${resultLabel(result)}`;
+
   return [
     ...renderFormattedValue(value.slice(0, match.index), mentions),
+    typedMention,
     <span className="composer__mention-preview" key="mention-preview">
-      @{resultLabel(result)}
+      {completion}
     </span>,
     value.slice(cursorPosition),
   ];
@@ -379,14 +390,17 @@ export function App() {
     setValue(nextValue);
     setCursorPosition(event.target.selectionStart);
     setSelectionEnd(event.target.selectionEnd);
+    setPreviewResult(null);
   }
 
   return (
     <main className="app">
       <section className="document" aria-label="Blank document">
         <div className="document__topbar">
-          <span className="document__icon">▱</span>
-          <span className="document__title">Untitled</span>
+          <button type="button" className="document__close" aria-label="Close new page">
+            x
+          </button>
+          <span className="document__title">New page</span>
         </div>
         <div className="document__page">
           <div className="composer" ref={composerRef}>

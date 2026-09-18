@@ -103,6 +103,21 @@ describe("people ranking", () => {
     ]);
     expect(results.map((person) => person.name)).toEqual(["Taylor Chen", "Jordan Kim", "Sam Alex"]);
   });
+
+  it("uses generic cross-field role overlap as a secondary signal", () => {
+    const results = recommendPeople([
+      { ...samAlex, id: "unrelated", name: "Jordan Lee", title: "Recruiter", team: "Sales" },
+      {
+        ...samAlex,
+        id: "related",
+        name: "Arjun Cohen",
+        title: "Engineering Manager",
+        team: "Product",
+      },
+    ]);
+
+    expect(results.map((person) => person.name)).toEqual(["Arjun Cohen", "Jordan Lee"]);
+  });
 });
 
 describe("GET /api/people", () => {

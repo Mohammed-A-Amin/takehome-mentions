@@ -78,6 +78,8 @@ export function similarityScore(person: Person, currentUser: CurrentUser): numbe
   const userTitle = tokenize(currentUser.title);
   const sharedTeamTokens = intersectionSize(personTeam, userTeam);
   const sharedTitleTokens = intersectionSize(personTitle, userTitle);
+  const sharedCrossFieldTokens =
+    intersectionSize(personTeam, userTitle) + intersectionSize(personTitle, userTeam);
 
   let score = 0;
   if (normalize(person.team) === normalize(currentUser.team) && person.team) score += 100;
@@ -85,6 +87,8 @@ export function similarityScore(person: Person, currentUser: CurrentUser): numbe
 
   if (normalize(person.title) === normalize(currentUser.title) && person.title) score += 60;
   else score += Math.min(sharedTitleTokens * 20, 40);
+
+  score += Math.min(sharedCrossFieldTokens * 20, 20);
 
   return score;
 }

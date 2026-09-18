@@ -72,10 +72,31 @@ body {
   font-size: 14px;
 }
 
-.document__icon {
+.document__close {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
   color: var(--text-tertiary);
-  font-size: 20px;
+  font-size: 16px;
+  font-family: inherit;
   line-height: 1;
+  cursor: pointer;
+}
+
+.document__close:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.document__close:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .document__title {
